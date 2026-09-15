@@ -186,8 +186,9 @@ class _VoteCounter<T> {
     }
     if (best == null || bestCount < minVotes) {
       // Keep a previously chosen value only while it still has support.
-      if (_chosen != null && (_counts[_chosen] ?? 0) >= minVotes)
+      if (_chosen != null && (_counts[_chosen] ?? 0) >= minVotes) {
         return _chosen;
+      }
       _chosen = null;
       return null;
     }
