@@ -1,5 +1,6 @@
 import CoreVideo
 import Foundation
+import UIKit
 import Vision
 
 /// Runs `VNRecognizeTextRequest` on camera frames, one at a time, and
@@ -33,13 +34,26 @@ final class TextRecognizer {
     let roi = regionOfInterest
     queue.async { [weak self] in
       defer { self?.lock.sync { self?.busy = false } }
-      guard let self else { return }
-      let lines = self.recognize(pixelBuffer, roi: roi)
-      completion(["lines": lines])
+      guard self != nil else { return }
+      let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .up, options: [:])
+      completion(["lines": Self.recognize(handler, roi: roi)])
     }
   }
 
-  private func recognize(_ pixelBuffer: CVPixelBuffer, roi: CGRect?) -> [[String: Any]] {
+  /// One-shot recognition of an encoded image (JPEG/PNG/HEIC).
+  static func recognizeImage(_ data: Data, roi: CGRect?, completion: @escaping ([String: Any]?) -> Void) {
+    DispatchQueue.global(qos: .userInitiated).async {
+      guard let image = UIImage(data: data), let cgImage = image.cgImage else {
+        completion(nil)
+        return
+      }
+      let handler = VNImageRequestHandler(
+        cgImage: cgImage, orientation: cgOrientation(image.imageOrientation), options: [:])
+      completion(["lines": recognize(handler, roi: roi)])
+    }
+  }
+
+  private static func recognize(_ handler: VNImageRequestHandler, roi: CGRect?) -> [[String: Any]] {
     let request = VNRecognizeTextRequest()
     request.recognitionLevel = .accurate
     request.usesLanguageCorrection = false
@@ -57,7 +71,6 @@ final class TextRecognizer {
       visionROI = CGRect(x: 0, y: 0, width: 1, height: 1)
     }
 
-    let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .up, options: [:])
     do {
       try handler.perform([request])
     } catch {
@@ -82,6 +95,20 @@ final class TextRecognizer {
           "height": Double(height),
         ],
       ]
+    }
+  }
+
+  private static func cgOrientation(_ o: UIImage.Orientation) -> CGImagePropertyOrientation {
+    switch o {
+    case .up: return .up
+    case .down: return .down
+    case .left: return .left
+    case .right: return .right
+    case .upMirrored: return .upMirrored
+    case .downMirrored: return .downMirrored
+    case .leftMirrored: return .leftMirrored
+    case .rightMirrored: return .rightMirrored
+    @unknown default: return .up
     }
   }
 }

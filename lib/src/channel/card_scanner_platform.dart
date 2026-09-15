@@ -62,6 +62,16 @@ abstract class CardScannerPlatform {
 
   /// OCR output, one event per analyzed frame while running.
   Stream<RecognizedFrame> get frames;
+
+  /// Runs OCR once on an encoded image (JPEG, PNG, HEIC…).
+  ///
+  /// Independent of the camera; may be called while it is running or not.
+  /// Throws [CardScannerException] with code `invalidImage` if the bytes
+  /// cannot be decoded.
+  Future<RecognizedFrame> recognizeImage(
+    Uint8List bytes, {
+    TextBox? regionOfInterest,
+  });
 }
 
 /// Default implementation talking to the plugin over platform channels.
@@ -107,6 +117,26 @@ class MethodChannelCardScannerPlatform implements CardScannerPlatform {
   @override
   Future<void> setRegionOfInterest(TextBox box) =>
       _methods.invokeMethod<void>('setRegionOfInterest', box.toMap());
+
+  @override
+  Future<RecognizedFrame> recognizeImage(
+    Uint8List bytes, {
+    TextBox? regionOfInterest,
+  }) async {
+    try {
+      final reply = await _methods.invokeMapMethod<Object?, Object?>(
+        'recognizeImage',
+        {
+          'bytes': bytes,
+          if (regionOfInterest != null)
+            'regionOfInterest': regionOfInterest.toMap(),
+        },
+      );
+      return RecognizedFrame.fromMap(reply ?? const {});
+    } on PlatformException catch (e) {
+      throw CardScannerException(e.code, e.message);
+    }
+  }
 
   @override
   Stream<RecognizedFrame> get frames => _frames ??= _events

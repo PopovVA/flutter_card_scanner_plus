@@ -7,6 +7,7 @@ import UIKit
 ///   stop()
 ///   setTorch(enabled: Bool)
 ///   setRegionOfInterest(Box)
+///   recognizeImage(bytes: Uint8List, regionOfInterest?: Box) -> {lines}
 /// Event channel: `flutter_card_scanner_plus/frames`
 ///   {lines: [{text, box: {left, top, width, height}, confidence}]}
 ///
@@ -45,6 +46,22 @@ public class FlutterCardScannerPlusPlugin: NSObject, FlutterPlugin, FlutterStrea
     case "setRegionOfInterest":
       session?.regionOfInterest = Self.parseBox(call.arguments as? [String: Any])
       result(nil)
+    case "recognizeImage":
+      let args = call.arguments as? [String: Any]
+      guard let bytes = args?["bytes"] as? FlutterStandardTypedData else {
+        result(FlutterError(code: "invalidArgument", message: "bytes missing", details: nil))
+        return
+      }
+      let roi = Self.parseBox(args?["regionOfInterest"] as? [String: Any])
+      TextRecognizer.recognizeImage(bytes.data, roi: roi) { frame in
+        DispatchQueue.main.async {
+          if let frame {
+            result(frame)
+          } else {
+            result(FlutterError(code: "invalidImage", message: "Could not decode image", details: nil))
+          }
+        }
+      }
     default:
       result(FlutterMethodNotImplemented)
     }

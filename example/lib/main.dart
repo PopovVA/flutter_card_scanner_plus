@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_card_scanner_plus/flutter_card_scanner_plus.dart';
+import 'package:image_picker/image_picker.dart';
 
 void main() => runApp(const ExampleApp());
 
@@ -36,6 +37,23 @@ class _HomePageState extends State<HomePage> {
     setState(() => _result = result);
   }
 
+  Future<void> _scanPhoto() async {
+    final file = await ImagePicker().pickImage(source: ImageSource.gallery);
+    if (file == null) return;
+    final bytes = await file.readAsBytes();
+    try {
+      final result = await CardScanner.scanImage(
+        bytes,
+        requirements: ScanRequirements.full,
+      );
+      if (!mounted) return;
+      setState(() => _result = result);
+    } on CardScannerException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final r = _result;
@@ -66,6 +84,12 @@ class _HomePageState extends State<HomePage> {
               ),
               icon: const Icon(Icons.brush_outlined),
               label: const Text('Custom overlay'),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _scanPhoto,
+              icon: const Icon(Icons.photo_library_outlined),
+              label: const Text('Scan from photo'),
             ),
             const SizedBox(height: 32),
             if (r == null)
