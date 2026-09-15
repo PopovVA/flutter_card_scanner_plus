@@ -1,17 +1,13 @@
-# flutter_card_scanner_plus_example
+# flutter_card_scanner_plus example
 
-Demonstrates how to use the flutter_card_scanner_plus plugin.
+Demonstrates the package:
 
-## Getting Started
+- `CardScannerPage` with the `standard`, `numberOnly` and `full` presets
+- `CardScannerView` with a custom `overlayBuilder` that prints raw per frame candidates
+- `CardScanner.scanImage` on a photo picked from the gallery
 
-This project is a starting point for a Flutter application.
+Run it on a real device; simulators and emulators do not have a usable camera.
 
-A few resources to get you started if this is your first Flutter project:
-
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```bash
+flutter run --release
+```

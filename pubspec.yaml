@@ -3,8 +3,8 @@ description: >-
   On-device bank card scanner (Visa, Mastercard, Amex). Native OCR via
   iOS Vision and Android ML Kit, no third-party camera plugin required.
 version: 0.1.0
-repository: https://github.com/vadimpopov/flutter_card_scanner_plus
-issue_tracker: https://github.com/vadimpopov/flutter_card_scanner_plus/issues
+repository: https://github.com/PopovVA/flutter_card_scanner_plus
+issue_tracker: https://github.com/PopovVA/flutter_card_scanner_plus/issues
 topics:
   - camera
   - ocr

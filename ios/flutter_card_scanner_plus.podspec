@@ -9,7 +9,7 @@ Pod::Spec.new do |s|
   s.description      = <<-DESC
 Scans payment cards with the camera using the Vision framework. Frames never leave the device.
                        DESC
-  s.homepage         = 'https://github.com/vadimpopov/flutter_card_scanner_plus'
+  s.homepage         = 'https://github.com/PopovVA/flutter_card_scanner_plus'
   s.license          = { :type => 'MIT', :file => '../LICENSE' }
   s.author           = { 'Vadim Popov' => 'm.vadimpopov@gmail.com' }
   s.source           = { :path => '.' }

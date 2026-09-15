@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset="1" stop-color="#1e1b4b"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3b82f6"/>
+      <stop offset="1" stop-color="#1d4ed8"/>
+    </linearGradient>
+    <linearGradient id="chip" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fde68a"/>
+      <stop offset="1" stop-color="#d97706"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#000" flood-opacity="0.45"/>
+    </filter>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="420" rx="24" fill="url(#bg)"/>
+
+  <!-- subtle grid -->
+  <g stroke="#ffffff" stroke-opacity="0.04">
+    <path d="M0 105H1200M0 210H1200M0 315H1200"/>
+    <path d="M300 0V420M600 0V420M900 0V420"/>
+  </g>
+
+  <!-- left: text -->
+  <text x="72" y="150" fill="#ffffff" font-size="44" font-weight="700">flutter_card_scanner_plus</text>
+  <text x="72" y="196" fill="#c7d2fe" font-size="22">On-device bank card scanner for Flutter</text>
+  <text x="72" y="228" fill="#94a3b8" font-size="17">Visa, Mastercard and American Express. Number, expiry and cardholder name.</text>
+  <text x="72" y="254" fill="#94a3b8" font-size="17">iOS Vision and Android ML Kit. Frames never leave the device.</text>
+
+  <g transform="translate(72 290)" font-size="14" font-weight="600">
+    <rect width="118" height="32" rx="16" fill="#1e293b" stroke="#334155"/>
+    <text x="59" y="21" fill="#e2e8f0" text-anchor="middle">iOS 15+</text>
+    <rect x="130" width="140" height="32" rx="16" fill="#1e293b" stroke="#334155"/>
+    <text x="200" y="21" fill="#e2e8f0" text-anchor="middle">Android 7.0+</text>
+    <rect x="282" width="128" height="32" rx="16" fill="#1e293b" stroke="#334155"/>
+    <text x="346" y="21" fill="#e2e8f0" text-anchor="middle">MIT</text>
+  </g>
+
+  <!-- right: card inside viewfinder -->
+  <g transform="translate(720 70) rotate(-6 200 130)">
+    <rect x="0" y="0" width="400" height="252" rx="22" fill="url(#card)" filter="url(#shadow)"/>
+    <circle cx="340" cy="60" r="34" fill="#ffffff" fill-opacity="0.12"/>
+    <rect x="32" y="64" width="58" height="44" rx="8" fill="url(#chip)"/>
+    <path d="M32 82h58M32 94h58M61 64v44" stroke="#92400e" stroke-opacity="0.5" stroke-width="1.5"/>
+    <text x="32" y="158" fill="#ffffff" font-size="27" font-family="'Courier New', monospace" font-weight="700" letter-spacing="2">4242 4242 4242 4242</text>
+    <text x="32" y="186" fill="#bfdbfe" font-size="10" letter-spacing="1.5">VALID THRU</text>
+    <text x="110" y="188" fill="#ffffff" font-size="16" font-family="'Courier New', monospace" font-weight="700">12/28</text>
+    <text x="32" y="222" fill="#ffffff" font-size="18" font-family="'Courier New', monospace" font-weight="700" letter-spacing="2">JOHN A SMITH</text>
+    <text x="368" y="226" fill="#ffffff" font-size="22" font-style="italic" font-weight="800" text-anchor="end">VISA</text>
+  </g>
+
+  <!-- viewfinder brackets -->
+  <g fill="none" stroke="#4ade80" stroke-width="6" stroke-linecap="round" filter="url(#glow)" transform="translate(720 70) rotate(-6 200 130)">
+    <path d="M-22 40V-4a18 18 0 0 1 18-18h44"/>
+    <path d="M360-22h44a18 18 0 0 1 18 18v44"/>
+    <path d="M422 212v44a18 18 0 0 1-18 18h-44"/>
+    <path d="M40 274h-44a18 18 0 0 1-18-18v-44"/>
+  </g>
+
+  <!-- scan line -->
+  <rect x="705" y="176" width="430" height="3" fill="#4ade80" fill-opacity="0.55" transform="rotate(-6 920 200)"/>
+</svg>
