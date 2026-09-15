@@ -136,7 +136,10 @@ class _CardScannerViewState extends State<CardScannerView> {
                       child: SizedBox(
                         width: camera.previewWidth.toDouble(),
                         height: camera.previewHeight.toDouble(),
-                        child: Texture(textureId: camera.textureId),
+                        child: RotatedBox(
+                          quarterTurns: camera.quarterTurns,
+                          child: Texture(textureId: camera.textureId),
+                        ),
                       ),
                     ),
                   ),

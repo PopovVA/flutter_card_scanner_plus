@@ -34,14 +34,23 @@ class CameraHandle {
     required this.textureId,
     required this.previewWidth,
     required this.previewHeight,
+    this.rotation = 0,
   });
 
   /// Texture to render with `Texture(textureId: ...)`.
   final int textureId;
 
-  /// Preview dimensions in pixels, portrait orientation.
+  /// Preview dimensions in pixels, upright (portrait) orientation — i.e.
+  /// after [rotation] has been applied.
   final int previewWidth;
   final int previewHeight;
+
+  /// Clockwise rotation in degrees (0/90/180/270) to apply to the raw
+  /// texture so it displays upright. Android delivers sensor-oriented
+  /// buffers; iOS rotates them natively and reports 0.
+  final int rotation;
+
+  int get quarterTurns => (rotation ~/ 90) % 4;
 
   double get aspectRatio => previewWidth / previewHeight;
 }
@@ -101,6 +110,7 @@ class MethodChannelCardScannerPlatform implements CardScannerPlatform {
         textureId: reply!['textureId'] as int,
         previewWidth: (reply['previewWidth'] as num).toInt(),
         previewHeight: (reply['previewHeight'] as num).toInt(),
+        rotation: (reply['rotation'] as num?)?.toInt() ?? 0,
       );
     } on PlatformException catch (e) {
       throw CardScannerException(e.code, e.message);

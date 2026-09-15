@@ -72,6 +72,13 @@ kotlin {
 }
 
 dependencies {
+    val camerax = "1.6.2"
+    implementation("androidx.camera:camera-core:$camerax")
+    implementation("androidx.camera:camera-camera2:$camerax")
+    implementation("androidx.camera:camera-lifecycle:$camerax")
+    implementation("androidx.exifinterface:exifinterface:1.4.2")
+    // Bundled model: works offline, no Play Services download at first use.
+    implementation("com.google.mlkit:text-recognition:16.0.1")
+
     testImplementation("org.jetbrains.kotlin:kotlin-test")
-    testImplementation("org.mockito:mockito-core:5.0.0")
 }
