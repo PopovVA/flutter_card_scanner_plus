@@ -33,19 +33,19 @@ abstract final class CardScanner {
     FrameParseResult frame,
     ScanRequirements requirements,
   ) {
-    final hasPan = frame.pan != null;
-    final hasExpiry = frame.expiry != null;
-    final hasName = frame.name != null;
+    final found = {
+      if (frame.pan != null) CardField.number,
+      if (frame.expiry != null) CardField.expiry,
+      if (frame.name != null) CardField.name,
+    };
     return CardScanResult(
       number: frame.pan?.number,
       brand: frame.pan?.brand,
       expiryMonth: frame.expiry?.month,
       expiryYear: frame.expiry?.year,
       cardholderName: frame.name?.name,
-      isComplete:
-          hasPan &&
-          (!requirements.requireExpiry || hasExpiry) &&
-          (!requirements.requireName || hasName),
+      // A single image has no "later frames": only required fields matter.
+      isComplete: requirements.requiredSatisfied(found),
     );
   }
 }

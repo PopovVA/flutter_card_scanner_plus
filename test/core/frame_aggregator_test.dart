@@ -74,16 +74,55 @@ void main() {
       expect(agg.current.number, isNull);
     });
 
-    test('complete once number and expiry are stable (default)', () {
+    test('default: number + expiry, then waits briefly for the name', () {
       final agg = FrameAggregator();
       for (var i = 0; i < 3; i++) {
         agg.add(frame(pan: visa, expiry: '12/28'));
       }
       final r = agg.current;
-      expect(r.isComplete, isTrue);
+      expect(r.hasNumber, isTrue);
       expect(r.formattedExpiry, '12/28');
-      expect(r.cardholderName, isNull);
+      expect(r.isComplete, isFalse, reason: 'still waiting for preferred name');
+
+      for (
+        var i = 0;
+        i < ScanRequirements.standard.preferredTimeoutFrames;
+        i++
+      ) {
+        agg.add(frame(pan: visa, expiry: '12/28'));
+      }
+      expect(agg.current.isComplete, isTrue);
+      expect(agg.current.cardholderName, isNull);
     });
+
+    test('default: completes immediately once the name is stable', () {
+      final agg = FrameAggregator();
+      for (var i = 0; i < 3; i++) {
+        agg.add(frame(pan: visa, expiry: '12/28', name: 'JOHN SMITH'));
+      }
+      expect(agg.current.isComplete, isTrue);
+      expect(agg.current.cardholderName, 'JOHN SMITH');
+    });
+
+    test(
+      'preferred timeout counts only frames with required fields stable',
+      () {
+        final agg = FrameAggregator(
+          requirements: const ScanRequirements(preferredTimeoutFrames: 3),
+        );
+        for (var i = 0; i < 10; i++) {
+          agg.add(frame(pan: visa)); // expiry missing → timer never starts
+        }
+        expect(agg.current.isComplete, isFalse);
+        for (var i = 0; i < 2; i++) {
+          agg.add(frame(pan: visa, expiry: '12/28'));
+        }
+        expect(agg.current.isComplete, isFalse); // expiry just became stable
+        agg.add(frame(pan: visa, expiry: '12/28'));
+        agg.add(frame(pan: visa, expiry: '12/28'));
+        expect(agg.current.isComplete, isTrue);
+      },
+    );
 
     test('not complete without expiry when it is required', () {
       final agg = FrameAggregator();
@@ -94,14 +133,28 @@ void main() {
       expect(agg.current.isComplete, isFalse);
     });
 
-    test('complete with number only when expiry is not required', () {
-      final agg = FrameAggregator(
-        requirements: const ScanRequirements(requireExpiry: false),
-      );
+    test('numberOnly completes with just the number', () {
+      final agg = FrameAggregator(requirements: ScanRequirements.numberOnly);
       for (var i = 0; i < 3; i++) {
         agg.add(frame(pan: visa));
       }
       expect(agg.current.isComplete, isTrue);
+    });
+
+    test('number is always required even if omitted from the set', () {
+      const r = ScanRequirements(required: {}, preferred: {});
+      expect(r.isRequired(CardField.number), isTrue);
+      expect(r.isRequired(CardField.expiry), isFalse);
+      expect(r.isPreferred(CardField.expiry), isFalse);
+    });
+
+    test('a field in both sets is treated as required', () {
+      const r = ScanRequirements(
+        required: {CardField.expiry},
+        preferred: {CardField.expiry},
+      );
+      expect(r.isRequired(CardField.expiry), isTrue);
+      expect(r.isPreferred(CardField.expiry), isFalse);
     });
 
     test('name required: waits for name', () {
@@ -117,23 +170,21 @@ void main() {
       expect(agg.current.cardholderName, 'JOHN SMITH');
     });
 
-    test('name required with timeout: completes without name eventually', () {
+    test('expiry can be preferred instead of required', () {
       final agg = FrameAggregator(
         requirements: const ScanRequirements(
-          requireName: true,
-          nameTimeoutFrames: 4,
+          required: {CardField.number},
+          preferred: {CardField.expiry},
+          preferredTimeoutFrames: 2,
         ),
       );
-      for (var i = 0; i < 3; i++) {
-        agg.add(frame(pan: visa, expiry: '12/28'));
-      }
-      // Stable since frame 3; timeout counts frames while stable.
+      agg.add(frame(pan: visa));
+      agg.add(frame(pan: visa));
+      agg.add(frame(pan: visa)); // stable, 1 frame elapsed
       expect(agg.current.isComplete, isFalse);
-      agg.add(frame(pan: visa, expiry: '12/28'));
-      agg.add(frame(pan: visa, expiry: '12/28'));
-      agg.add(frame(pan: visa, expiry: '12/28'));
+      agg.add(frame(pan: visa)); // 2 frames elapsed
       expect(agg.current.isComplete, isTrue);
-      expect(agg.current.cardholderName, isNull);
+      expect(agg.current.hasExpiry, isFalse);
     });
 
     test('fast preset accepts first frame', () {

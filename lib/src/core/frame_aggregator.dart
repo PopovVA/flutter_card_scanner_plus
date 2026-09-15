@@ -6,13 +6,25 @@ import 'card_brand.dart';
 import 'card_frame_parser.dart';
 import 'card_scan_result.dart';
 
-/// Controls when a scan is considered complete.
+/// A field the scanner can extract from a card.
+enum CardField { number, expiry, name }
+
+/// Controls which fields are needed and when a scan is considered complete.
+///
+/// * [required] — the result is not complete until each of these has been
+///   confirmed. [CardField.number] is always required.
+/// * [preferred] — once the required fields are stable, wait up to
+///   [preferredTimeoutFrames] more frames for these, then complete without
+///   them. Use this for fields that are nice to have but unreliable, such
+///   as the cardholder name.
+/// * Any other field is still filled in if it happens to be recognized,
+///   but never delays completion.
 @immutable
 class ScanRequirements {
   const ScanRequirements({
-    this.requireExpiry = true,
-    this.requireName = false,
-    this.nameTimeoutFrames = 20,
+    this.required = const {CardField.number, CardField.expiry},
+    this.preferred = const {CardField.name},
+    this.preferredTimeoutFrames = 12,
     this.panVotes = 3,
     this.expiryVotes = 2,
     this.nameVotes = 3,
@@ -26,16 +38,15 @@ class ScanRequirements {
              windowSize >= nameVotes,
        );
 
-  /// Wait for an expiry date before completing.
-  final bool requireExpiry;
+  /// Fields that must be confirmed before the scan completes.
+  final Set<CardField> required;
 
-  /// Wait for a cardholder name before completing.
-  final bool requireName;
+  /// Fields to wait for briefly after [required] are stable.
+  final Set<CardField> preferred;
 
-  /// When [requireName] is set: give up on the name and complete anyway
-  /// after this many frames with a stable number (and expiry, if
-  /// required). `null` waits indefinitely.
-  final int? nameTimeoutFrames;
+  /// How many frames to keep waiting for [preferred] fields once every
+  /// required field is stable. At ~8 OCR frames per second, 12 ≈ 1.5 s.
+  final int preferredTimeoutFrames;
 
   /// How many frames must agree on a value before it is accepted.
   final int panVotes;
@@ -45,20 +56,71 @@ class ScanRequirements {
   /// Number of most recent frames considered when counting votes.
   final int windowSize;
 
-  /// Accept the first Luhn-valid number immediately — fastest, least safe.
-  static const fast = ScanRequirements(
-    panVotes: 1,
-    expiryVotes: 1,
-    nameVotes: 2,
-  );
-
-  /// Number and expiry only (default).
+  /// Number and expiry required, name if it shows up quickly (default).
   static const standard = ScanRequirements();
 
-  /// Number, expiry and name, waiting for all three.
+  /// Only the number; finish as soon as it is stable.
+  static const numberOnly = ScanRequirements(
+    required: {CardField.number},
+    preferred: {},
+  );
+
+  /// Number, expiry and name — wait for all three.
   static const full = ScanRequirements(
-    requireName: true,
-    nameTimeoutFrames: null,
+    required: {CardField.number, CardField.expiry, CardField.name},
+    preferred: {},
+  );
+
+  /// Accept the first Luhn-valid number and expiry immediately, don't wait
+  /// for the name — fastest, least safe.
+  static const fast = ScanRequirements(
+    preferred: {},
+    panVotes: 1,
+    expiryVotes: 1,
+    nameVotes: 1,
+  );
+
+  bool isRequired(CardField field) =>
+      field == CardField.number || required.contains(field);
+
+  bool isPreferred(CardField field) =>
+      !isRequired(field) && preferred.contains(field);
+
+  /// Whether a result holding [found] satisfies these requirements after
+  /// [framesSinceRequiredStable] frames with all required fields stable.
+  bool isSatisfied(Set<CardField> found, int framesSinceRequiredStable) {
+    for (final field in CardField.values) {
+      if (found.contains(field)) continue;
+      if (isRequired(field)) return false;
+      if (isPreferred(field) &&
+          framesSinceRequiredStable < preferredTimeoutFrames) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /// Whether every required field is in [found].
+  bool requiredSatisfied(Set<CardField> found) =>
+      CardField.values.every((f) => !isRequired(f) || found.contains(f));
+
+  ScanRequirements copyWith({
+    Set<CardField>? required,
+    Set<CardField>? preferred,
+    int? preferredTimeoutFrames,
+    int? panVotes,
+    int? expiryVotes,
+    int? nameVotes,
+    int? windowSize,
+  }) => ScanRequirements(
+    required: required ?? this.required,
+    preferred: preferred ?? this.preferred,
+    preferredTimeoutFrames:
+        preferredTimeoutFrames ?? this.preferredTimeoutFrames,
+    panVotes: panVotes ?? this.panVotes,
+    expiryVotes: expiryVotes ?? this.expiryVotes,
+    nameVotes: nameVotes ?? this.nameVotes,
+    windowSize: windowSize ?? this.windowSize,
   );
 }
 
@@ -106,17 +168,14 @@ class FrameAggregator {
     final expiry = _expiry.stable(requirements.expiryVotes);
     final name = _name.stable(requirements.nameVotes);
 
-    final requiredStable =
-        pan != null && (!requirements.requireExpiry || expiry != null);
-    _framesSinceRequiredStable = requiredStable
+    final found = {
+      if (pan != null) CardField.number,
+      if (expiry != null) CardField.expiry,
+      if (name != null) CardField.name,
+    };
+    _framesSinceRequiredStable = requirements.requiredSatisfied(found)
         ? _framesSinceRequiredStable + 1
         : 0;
-
-    final nameSatisfied =
-        !requirements.requireName ||
-        name != null ||
-        (requirements.nameTimeoutFrames != null &&
-            _framesSinceRequiredStable >= requirements.nameTimeoutFrames!);
 
     int? month;
     int? year;
@@ -132,7 +191,7 @@ class FrameAggregator {
       expiryMonth: month,
       expiryYear: year,
       cardholderName: name,
-      isComplete: requiredStable && nameSatisfied,
+      isComplete: requirements.isSatisfied(found, _framesSinceRequiredStable),
     );
     return _current;
   }

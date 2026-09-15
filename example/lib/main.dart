@@ -67,13 +67,19 @@ class _HomePageState extends State<HomePage> {
             FilledButton.icon(
               onPressed: () => _scan(requirements: ScanRequirements.standard),
               icon: const Icon(Icons.credit_card),
-              label: const Text('Scan number + expiry'),
+              label: const Text('Scan (number + expiry, name if quick)'),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () => _scan(requirements: ScanRequirements.numberOnly),
+              icon: const Icon(Icons.pin_outlined),
+              label: const Text('Scan number only'),
             ),
             const SizedBox(height: 12),
             OutlinedButton.icon(
               onPressed: () => _scan(requirements: ScanRequirements.full),
               icon: const Icon(Icons.badge_outlined),
-              label: const Text('Scan number + expiry + name'),
+              label: const Text('Scan all three (wait for name)'),
             ),
             const SizedBox(height: 12),
             OutlinedButton.icon(
