@@ -4,17 +4,18 @@
 #
 Pod::Spec.new do |s|
   s.name             = 'flutter_card_scanner_plus'
-  s.version          = '0.0.1'
-  s.summary          = 'A new Flutter plugin project.'
+  s.version          = '0.1.0'
+  s.summary          = 'On-device bank card scanner (Visa, Mastercard, Amex).'
   s.description      = <<-DESC
-A new Flutter plugin project.
+Scans payment cards with the camera using the Vision framework. Frames never leave the device.
                        DESC
-  s.homepage         = 'http://example.com'
-  s.license          = { :file => '../LICENSE' }
-  s.author           = { 'Your Company' => 'email@example.com' }
+  s.homepage         = 'https://github.com/vadimpopov/flutter_card_scanner_plus'
+  s.license          = { :type => 'MIT', :file => '../LICENSE' }
+  s.author           = { 'Vadim Popov' => 'm.vadimpopov@gmail.com' }
   s.source           = { :path => '.' }
   s.source_files = 'flutter_card_scanner_plus/Sources/flutter_card_scanner_plus/**/*'
   s.dependency 'Flutter'
+  s.frameworks = 'AVFoundation', 'Vision'
   s.platform = :ios, '15.0'
 
   # Flutter.framework does not contain a i386 slice.
