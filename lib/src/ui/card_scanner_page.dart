@@ -18,23 +18,25 @@ class CardScannerPage extends StatefulWidget {
     this.requirements = ScanRequirements.standard,
     this.title,
     this.overlayBuilder,
-    this.foregroundColor = Colors.white,
+    this.foregroundColor,
   });
 
   final ScanRequirements requirements;
   final String? title;
   final CardScannerOverlayBuilder? overlayBuilder;
 
-  /// Color of the close button, torch toggle and title. Applied explicitly
-  /// so the app's `AppBarTheme` cannot make them vanish on the dark preview.
-  final Color foregroundColor;
+  /// Color of the close button, torch toggle and title.
+  ///
+  /// When `null` (default) it follows the app theme: `AppBarTheme.foregroundColor`,
+  /// then `AppBarTheme.iconTheme.color`, then white. Pass a color to override.
+  final Color? foregroundColor;
 
   static Future<CardScanResult?> show(
     BuildContext context, {
     ScanRequirements requirements = ScanRequirements.standard,
     String? title,
     CardScannerOverlayBuilder? overlayBuilder,
-    Color foregroundColor = Colors.white,
+    Color? foregroundColor,
   }) => Navigator.of(context).push<CardScanResult>(
     MaterialPageRoute(
       fullscreenDialog: true,
@@ -79,7 +81,12 @@ class _CardScannerPageState extends State<CardScannerPage> {
 
   @override
   Widget build(BuildContext context) {
-    final fg = widget.foregroundColor;
+    final appBarTheme = Theme.of(context).appBarTheme;
+    final fg =
+        widget.foregroundColor ??
+        appBarTheme.foregroundColor ??
+        appBarTheme.iconTheme?.color ??
+        Colors.white;
     return Scaffold(
       backgroundColor: Colors.black,
       extendBodyBehindAppBar: true,
