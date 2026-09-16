@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../controller/card_scanner_controller.dart';
 import '../core/card_scan_result.dart';
@@ -17,17 +18,23 @@ class CardScannerPage extends StatefulWidget {
     this.requirements = ScanRequirements.standard,
     this.title,
     this.overlayBuilder,
+    this.foregroundColor = Colors.white,
   });
 
   final ScanRequirements requirements;
   final String? title;
   final CardScannerOverlayBuilder? overlayBuilder;
 
+  /// Color of the close button, torch toggle and title. Applied explicitly
+  /// so the app's `AppBarTheme` cannot make them vanish on the dark preview.
+  final Color foregroundColor;
+
   static Future<CardScanResult?> show(
     BuildContext context, {
     ScanRequirements requirements = ScanRequirements.standard,
     String? title,
     CardScannerOverlayBuilder? overlayBuilder,
+    Color foregroundColor = Colors.white,
   }) => Navigator.of(context).push<CardScanResult>(
     MaterialPageRoute(
       fullscreenDialog: true,
@@ -35,6 +42,7 @@ class CardScannerPage extends StatefulWidget {
         requirements: requirements,
         title: title,
         overlayBuilder: overlayBuilder,
+        foregroundColor: foregroundColor,
       ),
     ),
   );
@@ -71,19 +79,36 @@ class _CardScannerPageState extends State<CardScannerPage> {
 
   @override
   Widget build(BuildContext context) {
+    final fg = widget.foregroundColor;
     return Scaffold(
       backgroundColor: Colors.black,
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
-        foregroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        foregroundColor: fg,
+        // Explicit icon and title colors: AppBarTheme.iconTheme and
+        // titleTextStyle would otherwise override foregroundColor.
+        iconTheme: IconThemeData(color: fg),
+        actionsIconTheme: IconThemeData(color: fg),
+        titleTextStyle: TextStyle(
+          color: fg,
+          fontSize: 20,
+          fontWeight: FontWeight.w500,
+        ),
+        systemOverlayStyle: fg.computeLuminance() > 0.5
+            ? SystemUiOverlayStyle.light
+            : SystemUiOverlayStyle.dark,
         elevation: 0,
+        scrolledUnderElevation: 0,
         title: widget.title == null ? null : Text(widget.title!),
-        leading: const CloseButton(),
+        leading: CloseButton(color: fg),
         actions: [
           ValueListenableBuilder<CardScannerState>(
             valueListenable: _controller,
             builder: (context, state, _) => IconButton(
+              color: fg,
+              disabledColor: fg.withValues(alpha: 0.4),
               icon: Icon(state.torchEnabled ? Icons.flash_on : Icons.flash_off),
               onPressed: state.isRunning ? _controller.toggleTorch : null,
             ),
@@ -102,7 +127,7 @@ class _CardScannerPageState extends State<CardScannerPage> {
                   error.isPermissionDenied
                       ? 'Camera access is required to scan a card.'
                       : 'Camera error: ${error.message ?? error.code}',
-                  style: const TextStyle(color: Colors.white),
+                  style: TextStyle(color: fg),
                   textAlign: TextAlign.center,
                 ),
               ),

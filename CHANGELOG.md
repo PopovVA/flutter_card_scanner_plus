@@ -1,3 +1,8 @@
+## 0.1.1
+
+- `CardScannerPage`: close button, torch toggle and title are now always drawn in `foregroundColor` (white by default), regardless of the app's `AppBarTheme`. Previously a dark `AppBarTheme.iconTheme` made them invisible on the camera preview.
+- New `foregroundColor` parameter on `CardScannerPage` and `CardScannerPage.show`.
+
 ## 0.1.0
 
 Initial release.
