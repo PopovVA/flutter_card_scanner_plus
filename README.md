@@ -233,6 +233,7 @@ Everything in step 4 and 5 is plain Dart with no platform dependencies, and it i
 
 ## Limitations
 
+- The CVV / CVC is never read, by design. It is the proof that the cardholder is entering it knowingly, and capturing it from the camera would put every app using this package deeper into PCI DSS scope. Ask for it in a text field after the scan.
 - Visa, Mastercard and American Express only. Other networks are rejected even when the number is Luhn valid.
 - Cardholder name detection is heuristic. Embossed names on busy backgrounds, names with non Latin characters, and cards without a printed name will come back as `null`.
 - Portrait orientation only.
