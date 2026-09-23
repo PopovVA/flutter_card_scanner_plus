@@ -22,6 +22,11 @@ import io.flutter.view.TextureRegistry
  *   setTorch(enabled: Boolean)
  *   setRegionOfInterest(Box)
  *   recognizeImage(bytes: ByteArray, regionOfInterest?: Box) -> {lines}
+ * NFC method channel: `flutter_card_scanner_plus/nfc`
+ *   isAvailable() -> Boolean
+ *   connect()
+ *   transceive(command: ByteArray) -> ByteArray
+ *   close(message?: String, errorMessage?: String)
  * Event channel: `flutter_card_scanner_plus/frames`
  *   {lines: [{text, box: {left, top, width, height}, confidence}]}
  *   {preview: {textureId, previewWidth, previewHeight, rotation}} after a
@@ -41,7 +46,9 @@ class FlutterCardScannerPlusPlugin :
 
     private lateinit var methods: MethodChannel
     private lateinit var events: EventChannel
+    private lateinit var nfcMethods: MethodChannel
     private lateinit var textures: TextureRegistry
+    private var nfc: NfcSession? = null
 
     private var activityBinding: ActivityPluginBinding? = null
     private var session: CameraSession? = null
@@ -61,12 +68,44 @@ class FlutterCardScannerPlusPlugin :
         methods.setMethodCallHandler(this)
         events = EventChannel(binding.binaryMessenger, "flutter_card_scanner_plus/frames")
         events.setStreamHandler(this)
+
+        val session = NfcSession(binding.applicationContext)
+        nfc = session
+        nfcMethods = MethodChannel(binding.binaryMessenger, "flutter_card_scanner_plus/nfc")
+        nfcMethods.setMethodCallHandler { call, result -> handleNfc(session, call, result) }
+    }
+
+    private fun handleNfc(
+        session: NfcSession,
+        call: MethodCall,
+        result: MethodChannel.Result,
+    ) {
+        when (call.method) {
+            "isAvailable" -> result.success(session.isAvailable())
+            "connect" -> session.connect(result)
+            "transceive" -> {
+                val command = call.argument<ByteArray>("command")
+                if (command == null) {
+                    result.error("invalidArgument", "command missing", null)
+                } else {
+                    session.transceive(command, result)
+                }
+            }
+            "close" -> {
+                session.close(call.argument("message"), call.argument("errorMessage"))
+                result.success(null)
+            }
+            else -> result.notImplemented()
+        }
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         stop()
+        nfc?.close(null, null)
+        nfc = null
         methods.setMethodCallHandler(null)
         events.setStreamHandler(null)
+        nfcMethods.setMethodCallHandler(null)
     }
 
     // region ActivityAware
@@ -74,6 +113,7 @@ class FlutterCardScannerPlusPlugin :
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
         activityBinding = binding
         binding.addRequestPermissionsResultListener(this)
+        nfc?.attach(binding.activity)
     }
 
     override fun onDetachedFromActivityForConfigChanges() = onDetachedFromActivity()
@@ -90,6 +130,8 @@ class FlutterCardScannerPlusPlugin :
         if (wasRunning) {
             emitError("cameraDetached", "The scanner was detached from the Activity")
         }
+        nfc?.close(null, null)
+        nfc?.attach(null)
         activityBinding?.removeRequestPermissionsResultListener(this)
         activityBinding = null
     }

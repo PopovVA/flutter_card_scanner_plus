@@ -2,6 +2,15 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NFCReaderUsageDescription</key>
+	<string>NFC is used to read the card you hold against the phone.</string>
+	<key>com.apple.developer.nfc.readersession.iso7816.select-identifiers</key>
+	<array>
+		<string>2PAY.SYS.DDF01</string>
+		<string>A0000000031010</string>
+		<string>A0000000041010</string>
+		<string>A00000002501</string>
+	</array>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Pick a card photo to scan.</string>
 	<key>NSCameraUsageDescription</key>

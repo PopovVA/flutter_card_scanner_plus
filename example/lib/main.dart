@@ -165,6 +165,35 @@ class _HomePageState extends State<HomePage> {
       if (report.tooSlow) 'too slow to scan',
       if (report.webGpuFailure != null) 'WebGPU was not usable',
     ].join(', ');
+
+  Future<void> _probeNfc() async {
+    if (!await CardNfcProbe.isAvailable()) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('NFC is off or not supported here')),
+      );
+      return;
+    }
+    final report = await CardNfcProbe.run();
+    if (!mounted) return;
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(report.isSuccess ? 'Card answered' : 'No card data'),
+        content: SingleChildScrollView(
+          child: SelectableText(
+            report.summary,
+            style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -250,6 +279,12 @@ class _HomePageState extends State<HomePage> {
               onPressed: _scanPhoto,
               icon: const Icon(Icons.photo_library_outlined),
               label: const Text('Scan from photo'),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _probeNfc,
+              icon: const Icon(Icons.nfc),
+              label: const Text('NFC probe (tap a card)'),
             ),
             const SizedBox(height: 32),
             if (engine != null) ...[
