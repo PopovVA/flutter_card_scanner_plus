@@ -166,6 +166,27 @@ class _HomePageState extends State<HomePage> {
       if (report.webGpuFailure != null) 'WebGPU was not usable',
     ].join(', ');
 
+  Future<void> _readNfc() async {
+    if (!await CardNfcReader.isAvailable()) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('NFC is off or not supported here')),
+      );
+      return;
+    }
+    try {
+      final card = await CardNfcReader.read();
+      if (!mounted) return;
+      setState(() {
+        _result = card;
+        _lines = const [];
+      });
+    } on CardNfcException catch (e) {
+      if (!mounted || e.isCancelled) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
   Future<void> _probeNfc() async {
     if (!await CardNfcProbe.isAvailable()) {
       if (!mounted) return;
@@ -282,9 +303,15 @@ class _HomePageState extends State<HomePage> {
             ),
             const SizedBox(height: 12),
             OutlinedButton.icon(
-              onPressed: _probeNfc,
+              onPressed: _readNfc,
               icon: const Icon(Icons.nfc),
-              label: const Text('NFC probe (tap a card)'),
+              label: const Text('Tap card (NFC)'),
+            ),
+            const SizedBox(height: 12),
+            TextButton.icon(
+              onPressed: _probeNfc,
+              icon: const Icon(Icons.bug_report_outlined),
+              label: const Text('NFC probe (diagnostics)'),
             ),
             const SizedBox(height: 32),
             if (engine != null) ...[
