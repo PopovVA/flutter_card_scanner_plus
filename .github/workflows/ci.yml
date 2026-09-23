@@ -10,6 +10,13 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  leaks:
+    name: No leaked identifiers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: .github/leak-scan.sh
+
   dart:
     name: Analyze and test
     runs-on: ubuntu-latest
