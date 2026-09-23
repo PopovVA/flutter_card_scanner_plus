@@ -190,8 +190,10 @@ That is the whole point of how it is wired:
 - The plugin's Android manifest does **not** declare `android.permission.NFC`.
   Apps that want NFC add the one line themselves. Apps that do not, inherit
   nothing.
-- On iOS `CoreNFC` is weak linked and the API is only reachable with the NFC
-  entitlement, which only the app can add.
+- On iOS the binary does end up linking `CoreNFC`, which Swift autolinking
+  makes unavoidable from a plugin. That costs nothing: the framework ships on
+  every iOS 13 and later device, and without the entitlement, which only the
+  app itself can add, the API cannot open a session.
 
 ### Android setup
 

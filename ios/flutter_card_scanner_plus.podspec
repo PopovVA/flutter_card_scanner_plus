@@ -16,13 +16,18 @@ Scans payment cards with the camera using the Vision framework. Frames never lea
   s.source_files = 'flutter_card_scanner_plus/Sources/flutter_card_scanner_plus/**/*'
   s.dependency 'Flutter'
   s.frameworks = 'AVFoundation', 'Vision'
-  # Weak: apps that never use the NFC API do not need the entitlement, and
-  # CoreNFC is only touched when they call it.
+  # Declared weak, but Swift autolinking from `import CoreNFC` still links it
+  # strongly into the host app. Harmless: CoreNFC ships on every iOS 13+
+  # device and our floor is 15, and without the entitlement the API simply
+  # cannot open a session.
   s.weak_frameworks = 'CoreNFC'
   s.platform = :ios, '15.0'
 
   # Flutter.framework does not contain a i386 slice.
-  s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES', 'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'i386' }
+  s.pod_target_xcconfig = {
+    'DEFINES_MODULE' => 'YES',
+    'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'i386',
+  }
   s.swift_version = '5.0'
 
   # If your plugin requires a privacy manifest, for example if it uses any
