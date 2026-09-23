@@ -8,6 +8,11 @@ import UIKit
 ///   setTorch(enabled: Bool)
 ///   setRegionOfInterest(Box)
 ///   recognizeImage(bytes: Uint8List, regionOfInterest?: Box) -> {lines}
+/// NFC method channel: `flutter_card_scanner_plus/nfc`
+///   isAvailable() -> Bool
+///   connect(prompt: String)
+///   transceive(command: Uint8List) -> Uint8List
+///   close(message?: String, errorMessage?: String)
 /// Event channel: `flutter_card_scanner_plus/frames`
 ///   {lines: [{text, box: {left, top, width, height}, confidence}]}
 ///
@@ -17,6 +22,7 @@ public class FlutterCardScannerPlusPlugin: NSObject, FlutterPlugin, FlutterStrea
   private let textures: FlutterTextureRegistry
   private var session: CameraSession?
   private var eventSink: FlutterEventSink?
+  private var nfc: AnyObject?
 
   init(textures: FlutterTextureRegistry) {
     self.textures = textures
@@ -30,6 +36,57 @@ public class FlutterCardScannerPlusPlugin: NSObject, FlutterPlugin, FlutterStrea
     let events = FlutterEventChannel(
       name: "flutter_card_scanner_plus/frames", binaryMessenger: registrar.messenger())
     events.setStreamHandler(instance)
+
+    let nfcChannel = FlutterMethodChannel(
+      name: "flutter_card_scanner_plus/nfc", binaryMessenger: registrar.messenger())
+    nfcChannel.setMethodCallHandler { [weak instance] call, result in
+      instance?.handleNfc(call, result: result)
+    }
+  }
+
+  // MARK: - NFC
+
+  /// Lazily created so apps that never touch NFC never open a session.
+  @available(iOS 13.0, *)
+  private var nfcSession: NfcSession {
+    if let existing = nfc as? NfcSession { return existing }
+    let created = NfcSession()
+    nfc = created
+    return created
+  }
+
+  private func handleNfc(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard #available(iOS 13.0, *) else {
+      if call.method == "isAvailable" {
+        result(false)
+      } else {
+        result(
+          FlutterError(
+            code: "nfcUnavailable", message: "Requires iOS 13 or later", details: nil))
+      }
+      return
+    }
+
+    let args = call.arguments as? [String: Any]
+    switch call.method {
+    case "isAvailable":
+      result(NfcSession.isAvailable)
+    case "connect":
+      nfcSession.connect(prompt: args?["prompt"] as? String ?? "", result: result)
+    case "transceive":
+      guard let command = args?["command"] as? FlutterStandardTypedData else {
+        result(FlutterError(code: "invalidArgument", message: "command missing", details: nil))
+        return
+      }
+      nfcSession.transceive(command: command.data, result: result)
+    case "close":
+      nfcSession.close(
+        message: args?["message"] as? String,
+        errorMessage: args?["errorMessage"] as? String)
+      result(nil)
+    default:
+      result(FlutterMethodNotImplemented)
+    }
   }
 
   public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {

@@ -16,6 +16,9 @@ Scans payment cards with the camera using the Vision framework. Frames never lea
   s.source_files = 'flutter_card_scanner_plus/Sources/flutter_card_scanner_plus/**/*'
   s.dependency 'Flutter'
   s.frameworks = 'AVFoundation', 'Vision'
+  # Weak: apps that never use the NFC API do not need the entitlement, and
+  # CoreNFC is only touched when they call it.
+  s.weak_frameworks = 'CoreNFC'
   s.platform = :ios, '15.0'
 
   # Flutter.framework does not contain a i386 slice.

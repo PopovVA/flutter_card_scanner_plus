@@ -1,4 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Only apps that use the NFC API add this; the plugin does not. -->
+    <uses-permission android:name="android.permission.NFC" />
     <application
         android:label="flutter_card_scanner_plus_example"
         android:name="${applicationName}"

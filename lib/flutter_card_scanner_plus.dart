@@ -21,3 +21,9 @@ export 'src/ui/card_frame_overlay.dart';
 export 'src/ui/card_scanner_page.dart';
 export 'src/ui/card_scanner_view.dart';
 export 'src/card_scanner.dart';
+export 'src/nfc/apdu.dart';
+export 'src/nfc/card_nfc_probe.dart'
+    show CardNfcProbe, NfcExchange, NfcProbeReport;
+export 'src/nfc/nfc_platform.dart'
+    show CardNfcException, CardNfcPlatform, MethodChannelCardNfcPlatform;
+export 'src/nfc/tlv.dart';

@@ -20,6 +20,7 @@ Supported networks: **Visa**, **Mastercard**, **American Express**.
 - **Robust recognition.** Luhn check, BIN detection, repair of common OCR confusions (`O` vs `0`, `I` vs `1`, `S` vs `5`), and multi frame voting so a single misread never leaks into the result.
 - **Configurable fields.** Decide which fields are required, which are nice to have, and how long to wait for them.
 - **Static images too.** `CardScanner.scanImage(bytes)` recognizes a card in a photo from the gallery.
+- **Optional NFC.** Read the number and expiry straight off the chip. Apps that do not use it inherit no permission and no framework.
 - **Privacy by design.** Frames never leave the native layer. Only recognized strings and bounding boxes cross the platform channel. `toString()` on results masks the number.
 
 <p align="center">
@@ -176,6 +177,83 @@ CardScannerPage.show(
 | `fast` | number, expiry | none | Demos and tests. Accepts the first Luhn valid frame. |
 
 The number is always required. A field that is neither required nor preferred is still filled in when it happens to be recognized, but never delays completion.
+
+## NFC (optional)
+
+The package can also talk to the chip over NFC. This is **opt in at the
+source level**: an app that never calls the NFC API ships without the
+Android permission and without touching CoreNFC, so nothing new shows up in
+its manifest and nothing changes about its store listing.
+
+That is the whole point of how it is wired:
+
+- The plugin's Android manifest does **not** declare `android.permission.NFC`.
+  Apps that want NFC add the one line themselves. Apps that do not, inherit
+  nothing.
+- On iOS `CoreNFC` is weak linked and the API is only reachable with the NFC
+  entitlement, which only the app can add.
+
+### Android setup
+
+Add the permission to `android/app/src/main/AndroidManifest.xml`:
+
+```xml
+<uses-permission android:name="android.permission.NFC" />
+```
+
+Without it the NFC API reports `nfcUnavailable` and everything else keeps
+working.
+
+### iOS setup
+
+1. In Xcode, Runner target, Signing and Capabilities, add **Near Field
+   Communication Tag Reading**. This creates `Runner.entitlements` with
+   `com.apple.developer.nfc.readersession.formats` set to `TAG`, and enables
+   the capability for your App ID.
+2. Add to `ios/Runner/Info.plist` the purpose string and the identifiers the
+   app is allowed to select:
+
+```xml
+<key>NFCReaderUsageDescription</key>
+<string>NFC is used to read the card you hold against the phone.</string>
+<key>com.apple.developer.nfc.readersession.iso7816.select-identifiers</key>
+<array>
+  <string>2PAY.SYS.DDF01</string>
+  <string>A0000000031010</string>
+  <string>A0000000041010</string>
+  <string>A00000002501</string>
+</array>
+```
+
+Requires iOS 13 and an iPhone 7 or newer.
+
+### What the chip gives you
+
+| Field | Over NFC |
+|---|---|
+| Card number | yes, exactly, no OCR guesswork |
+| Expiry date | yes |
+| Cardholder name | rarely, most cards leave it empty |
+| CVV | never, it is not on the chip |
+
+So NFC is the precise path for the number and the date, and the camera stays
+the better path for the name.
+
+### Checking that it works
+
+`CardNfcProbe` opens a session, selects the contactless directory and then a
+payment application, and reports what happened. It stops before reading any
+record, so it cannot return card data and is safe to paste into a bug report.
+
+```dart
+if (await CardNfcProbe.isAvailable()) {
+  final report = await CardNfcProbe.run();
+  print(report.summary);
+}
+```
+
+Use it to confirm your entitlement and permission setup before wiring the
+real read.
 
 ## Scanning a photo
 
