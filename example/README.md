@@ -11,3 +11,9 @@ Run it on a real device; simulators and emulators do not have a usable camera.
 ```bash
 flutter run --release
 ```
+
+## Signing
+
+The project carries no development team on purpose, so it does not drag
+anyone else's account into the package. Open `ios/Runner.xcworkspace`, pick
+your own team under Signing and Capabilities, and build.

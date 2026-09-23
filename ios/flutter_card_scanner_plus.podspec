@@ -11,7 +11,7 @@ Scans payment cards with the camera using the Vision framework. Frames never lea
                        DESC
   s.homepage         = 'https://github.com/PopovVA/flutter_card_scanner_plus'
   s.license          = { :type => 'MIT', :file => '../LICENSE' }
-  s.author           = { 'Vadim Popov' => 'm.vadimpopov@gmail.com' }
+  s.author           = { 'Apis Systems LLC' => 'support@apissystems.dev' }
   s.source           = { :path => '.' }
   s.source_files = 'flutter_card_scanner_plus/Sources/flutter_card_scanner_plus/**/*'
   s.dependency 'Flutter'
