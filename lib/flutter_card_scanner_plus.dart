@@ -27,3 +27,6 @@ export 'src/nfc/card_nfc_probe.dart'
 export 'src/nfc/nfc_platform.dart'
     show CardNfcException, CardNfcPlatform, MethodChannelCardNfcPlatform;
 export 'src/nfc/tlv.dart';
+export 'src/nfc/card_nfc_reader.dart' show AflEntry, CardNfcReader;
+export 'src/nfc/pdol.dart';
+export 'src/nfc/track2.dart';

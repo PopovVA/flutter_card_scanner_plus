@@ -239,21 +239,46 @@ Requires iOS 13 and an iPhone 7 or newer.
 So NFC is the precise path for the number and the date, and the camera stays
 the better path for the name.
 
-### Checking that it works
-
-`CardNfcProbe` opens a session, selects the contactless directory and then a
-payment application, and reports what happened. It stops before reading any
-record, so it cannot return card data and is safe to paste into a bug report.
+### Reading a card
 
 ```dart
-if (await CardNfcProbe.isAvailable()) {
-  final report = await CardNfcProbe.run();
-  print(report.summary);
+if (await CardNfcReader.isAvailable()) {
+  final card = await CardNfcReader.read(
+    prompt: 'Hold your card near the top of the phone',
+  );
+  print(card.formattedNumber); // 4111 1111 1111 1111
+  print(card.formattedExpiry); // 12/28
 }
 ```
 
-Use it to confirm your entitlement and permission setup before wiring the
-real read.
+It returns the same `CardScanResult` as the camera, so the rest of your code
+does not care which way the card was read. `CardNfcException` is thrown when
+the session fails; check `isCancelled` to stay quiet when the user simply
+closed the sheet.
+
+The read performs the same steps a contactless terminal does, minus
+everything to do with paying: select the directory, select a payment
+application, ask for its file locator, read those records. No cryptogram is
+requested and no transaction is started, so tapping a card cannot move money.
+
+Cards outside the US may want a different country and currency in the data
+the terminal presents. Pass a profile if a card refuses to answer:
+
+```dart
+await CardNfcReader.read(
+  profile: const TerminalProfile(countryCode: 0x0643, currencyCode: 0x0978),
+);
+```
+
+### When a card will not read
+
+`CardNfcProbe` stops right after SELECT and reports what the card said. It
+never issues READ RECORD, so it cannot return card data and its output is
+safe to paste into a bug report.
+
+```dart
+print((await CardNfcProbe.run()).summary);
+```
 
 ## Scanning a photo
 

@@ -1,61 +1,7 @@
-import 'dart:typed_data';
-
 import 'package:flutter_card_scanner_plus/flutter_card_scanner_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// Replays recorded card replies, keyed by the command that triggers them.
-class FakeNfcPlatform implements CardNfcPlatform {
-  FakeNfcPlatform({
-    this.replies = const {},
-    this.connectError,
-    this.available = true,
-  });
-
-  final Map<String, String> replies;
-  final CardNfcException? connectError;
-  final bool available;
-
-  final commands = <String>[];
-  bool closed = false;
-  String? closeMessage;
-  String? closeErrorMessage;
-
-  @override
-  Future<bool> isAvailable() async => available;
-
-  @override
-  Future<void> connect({required String prompt}) async {
-    if (connectError != null) throw connectError!;
-  }
-
-  @override
-  Future<Uint8List> transceive(Uint8List command) async {
-    final hex = TlvParser.toHex(command);
-    commands.add(hex);
-    return TlvParser.fromHex(replies[hex] ?? '6A82');
-  }
-
-  @override
-  Future<void> close({String? message, String? errorMessage}) async {
-    closed = true;
-    closeMessage = message;
-    closeErrorMessage = errorMessage;
-  }
-}
-
-const selectPpse = '00A404000E325041592E5359532E444446303100';
-const selectVisa = '00A4040007A000000003101000';
-const selectMastercard = '00A4040007A000000004101000';
-
-/// PPSE reply advertising one Visa application.
-const visaDirectory =
-    '6F2F'
-    '840E325041592E5359532E4444463031'
-    'A51DBF0C1A6118'
-    '4F07A0000000031010'
-    '500A56495341204445424954'
-    '870101'
-    '9000';
+import 'fake_nfc_platform.dart';
 
 void main() {
   tearDown(() => CardNfcPlatform.instance = MethodChannelCardNfcPlatform());
