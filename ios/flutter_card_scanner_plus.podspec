@@ -4,7 +4,7 @@
 #
 Pod::Spec.new do |s|
   s.name             = 'flutter_card_scanner_plus'
-  s.version          = '0.1.2'
+  s.version          = '0.1.3'
   s.summary          = 'On-device bank card scanner (Visa, Mastercard, Amex).'
   s.description      = <<-DESC
 Scans payment cards with the camera using the Vision framework. Frames never leave the device.
