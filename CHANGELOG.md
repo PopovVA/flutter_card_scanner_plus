@@ -1,3 +1,15 @@
+## 0.1.3
+
+Housekeeping only; the public API is unchanged.
+
+- The example project no longer carries a development team, so it does not
+  drag anyone else's Apple account into the package and builds once you pick
+  your own team.
+- The podspec credits the publisher rather than a personal address.
+- CI refuses a build that carries a signing team, a home directory path, a
+  personal address or a credential.
+- README states that the CVV is intentionally never read.
+
 ## 0.1.2
 
 - `CardScannerPage` controls follow the app theme by default: `AppBarTheme.foregroundColor`, then `AppBarTheme.iconTheme.color`, then white. `foregroundColor` overrides the theme when set.
