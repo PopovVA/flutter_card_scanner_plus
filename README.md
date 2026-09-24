@@ -7,6 +7,7 @@
   <a href="https://github.com/PopovVA/flutter_card_scanner_plus/actions/workflows/ci.yml"><img src="https://github.com/PopovVA/flutter_card_scanner_plus/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/PopovVA/flutter_card_scanner_plus/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT"></a>
   <img src="https://img.shields.io/badge/platforms-iOS%20%7C%20Android-lightgrey.svg" alt="platforms">
+  <a href="https://buymeacoffee.com/LeonRedfield"><img src="https://img.shields.io/badge/Buy%20me%20a%20coffee-support-FFDD00?logo=buymeacoffee&logoColor=black" alt="Buy me a coffee"></a>
 </p>
 
 Scan a payment card with the camera and get its number, expiry date and cardholder name back as a typed result. Recognition runs fully on the device using the platform OCR engines: Vision on iOS and ML Kit on Android. There is no third party camera plugin, no cloud service and no network access.
@@ -257,6 +258,11 @@ Run the checks locally before opening a PR:
 flutter analyze
 flutter test
 ```
+
+## Support
+
+This package is free and maintained in my own time. If it saved you some,
+[buy me a coffee](https://buymeacoffee.com/LeonRedfield).
 
 ## License
 
