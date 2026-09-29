@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../channel/card_scanner_platform.dart';
 import '../controller/card_scanner_controller.dart';
 import '../core/recognized_text.dart';
 import 'card_frame_overlay.dart';
@@ -65,7 +66,7 @@ class CardScannerView extends StatefulWidget {
 
 class _CardScannerViewState extends State<CardScannerView> {
   Size? _lastSize;
-  int? _lastTextureId;
+  CameraHandle? _lastCamera;
 
   @override
   void initState() {
@@ -111,9 +112,10 @@ class _CardScannerViewState extends State<CardScannerView> {
   void _syncRegionOfInterest(Size size, CardScannerState state) {
     final camera = state.camera;
     if (camera == null) return;
-    if (_lastSize == size && _lastTextureId == camera.textureId) return;
+    // Rotation reshapes the preview, so the handle is compared whole.
+    if (_lastSize == size && _lastCamera == camera) return;
     _lastSize = size;
-    _lastTextureId = camera.textureId;
+    _lastCamera = camera;
 
     final preview = _previewRect(
       size,

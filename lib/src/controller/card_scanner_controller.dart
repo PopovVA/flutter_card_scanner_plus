@@ -79,6 +79,7 @@ class CardScannerController extends ValueNotifier<CardScannerState> {
   final FrameAggregator _aggregator;
   final _results = StreamController<CardScanResult>.broadcast();
   StreamSubscription<RecognizedFrame>? _frames;
+  StreamSubscription<CameraHandle>? _preview;
   Completer<CardScanResult>? _once;
   TextBox? _regionOfInterest;
   bool _disposed = false;
@@ -104,6 +105,11 @@ class CardScannerController extends ValueNotifier<CardScannerState> {
           );
         },
       );
+      // A device rotation reshapes the preview; the view watches this to
+      // redraw the texture and move the region of interest with it.
+      _preview = _platform.previewUpdates.listen((handle) {
+        if (value.isRunning) value = value.copyWith(camera: handle);
+      });
       value = value.copyWith(camera: camera, isRunning: true);
     } on CardScannerException catch (e) {
       value = value.copyWith(error: e);
@@ -117,7 +123,12 @@ class CardScannerController extends ValueNotifier<CardScannerState> {
     if (!value.isRunning) return;
     await _frames?.cancel();
     _frames = null;
+    await _preview?.cancel();
+    _preview = null;
     await _platform.stop();
+    // dispose() stops the camera too, and the platform call above gives the
+    // notifier time to be torn down before this returns.
+    if (_disposed) return;
     value = value.copyWith(
       isRunning: false,
       torchEnabled: false,

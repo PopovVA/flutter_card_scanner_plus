@@ -24,6 +24,8 @@ import io.flutter.view.TextureRegistry
  *   recognizeImage(bytes: ByteArray, regionOfInterest?: Box) -> {lines}
  * Event channel: `flutter_card_scanner_plus/frames`
  *   {lines: [{text, box: {left, top, width, height}, confidence}]}
+ *   {preview: {textureId, previewWidth, previewHeight, rotation}} after a
+ *   device rotation changes the shape of the preview
  *
  * All boxes are normalized (0..1) in upright (portrait) preview coordinates
  * with a top-left origin. `rotation` is the clockwise rotation, in degrees,
@@ -131,6 +133,20 @@ class FlutterCardScannerPlusPlugin :
         val launch = {
             try {
                 val s = CameraSession(activity, textures) { frame -> eventSink?.success(frame) }
+                // A rotation changes the shape of the preview, so Dart is
+                // told to re-read it rather than keeping the start values.
+                s.onPreviewChanged = { info ->
+                    eventSink?.success(
+                        mapOf(
+                            "preview" to mapOf(
+                                "textureId" to info.textureId,
+                                "previewWidth" to info.width,
+                                "previewHeight" to info.height,
+                                "rotation" to info.rotation,
+                            )
+                        )
+                    )
+                }
                 s.regionOfInterest = roi
                 session = s
                 s.start { info ->

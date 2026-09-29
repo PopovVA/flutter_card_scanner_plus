@@ -10,6 +10,8 @@ import UIKit
 ///   recognizeImage(bytes: Uint8List, regionOfInterest?: Box) -> {lines}
 /// Event channel: `flutter_card_scanner_plus/frames`
 ///   {lines: [{text, box: {left, top, width, height}, confidence}]}
+///   {preview: {textureId, previewWidth, previewHeight, rotation}} after a
+///   device rotation changes the shape of the preview
 ///
 /// All boxes are normalized (0..1) in portrait preview coordinates with a
 /// top-left origin, regardless of the region of interest.
@@ -83,6 +85,19 @@ public class FlutterCardScannerPlusPlugin: NSObject, FlutterPlugin, FlutterStrea
       do {
         let session = try CameraSession(textures: self.textures) { [weak self] frame in
           self?.eventSink?(frame)
+        }
+        // A rotation changes the shape of the preview, so Dart is told to
+        // re-read it rather than keeping the size it got at start.
+        session.onPreviewChanged = { [weak self] in
+          guard let self, let session = self.session else { return }
+          self.eventSink?([
+            "preview": [
+              "textureId": session.textureId,
+              "previewWidth": session.previewSize.width,
+              "previewHeight": session.previewSize.height,
+              "rotation": 0,
+            ]
+          ])
         }
         session.regionOfInterest = roi
         self.session = session

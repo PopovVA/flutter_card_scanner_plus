@@ -14,7 +14,10 @@ final class CameraSession: NSObject, FlutterTexture, AVCaptureVideoDataOutputSam
   typealias FrameHandler = ([String: Any]) -> Void
 
   private(set) var textureId: Int64 = 0
-  let previewSize: CGSize
+  private(set) var previewSize: CGSize
+
+  /// Called when a device rotation changes the shape of the preview.
+  var onPreviewChanged: (() -> Void)?
 
   /// Normalized (top-left origin) area of the preview to run OCR on.
   var regionOfInterest: CGRect? {
@@ -32,6 +35,10 @@ final class CameraSession: NSObject, FlutterTexture, AVCaptureVideoDataOutputSam
 
   private let bufferLock = NSLock()
   private var latestBuffer: CVPixelBuffer?
+  private var videoOutput: AVCaptureVideoDataOutput?
+
+  /// Sensor dimensions, before any rotation is applied.
+  private let sensorSize: CGSize
 
   init(textures: FlutterTextureRegistry, onFrame: @escaping FrameHandler) throws {
     guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) else {
@@ -58,24 +65,85 @@ final class CameraSession: NSObject, FlutterTexture, AVCaptureVideoDataOutputSam
     }
     session.addOutput(output)
 
-    if let connection = output.connection(with: .video) {
-      if #available(iOS 17.0, *) {
-        if connection.isVideoRotationAngleSupported(90) { connection.videoRotationAngle = 90 }
-      } else {
-        if connection.isVideoOrientationSupported { connection.videoOrientation = .portrait }
-      }
-    }
     session.commitConfiguration()
+    videoOutput = output
 
-    // Buffers are delivered rotated to portrait, so swap the sensor dimensions.
     let dims = CMVideoFormatDescriptionGetDimensions(device.activeFormat.formatDescription)
-    previewSize = CGSize(width: Int(dims.height), height: Int(dims.width))
+    sensorSize = CGSize(width: Int(dims.width), height: Int(dims.height))
+    // Portrait until the first orientation read below.
+    previewSize = CGSize(width: sensorSize.height, height: sensorSize.width)
 
     super.init()
 
     output.setSampleBufferDelegate(self, queue: videoQueue)
     textureId = textures.register(self)
     Self.configureFocus(device)
+
+    // Rotate the delivered buffers to match the interface. Doing it here
+    // rather than in Dart keeps Vision reading upright text, which is what
+    // recognition depends on, and lets the texture render without a turn.
+    applyOrientation(notify: false)
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(orientationChanged),
+      name: UIDevice.orientationDidChangeNotification,
+      object: nil)
+  }
+
+  @objc private func orientationChanged() {
+    applyOrientation(notify: true)
+  }
+
+  /// Points the video connection at the current interface orientation and
+  /// updates the preview shape to match.
+  private func applyOrientation(notify: Bool) {
+    let angle = Self.rotationAngle()
+    let landscape = angle == 90 || angle == 270
+
+    if let connection = videoOutput?.connection(with: .video) {
+      if #available(iOS 17.0, *) {
+        if connection.isVideoRotationAngleSupported(angle) {
+          connection.videoRotationAngle = angle
+        }
+      } else if connection.isVideoOrientationSupported {
+        connection.videoOrientation = Self.legacyOrientation(angle)
+      }
+    }
+
+    let size = landscape
+      ? CGSize(width: sensorSize.width, height: sensorSize.height)
+      : CGSize(width: sensorSize.height, height: sensorSize.width)
+    let changed = size != previewSize
+    previewSize = size
+    if notify && changed { onPreviewChanged?() }
+  }
+
+  /// Clockwise angle the buffer needs so its top matches the top of the UI.
+  private static func rotationAngle() -> CGFloat {
+    let interface: UIInterfaceOrientation?
+    if Thread.isMainThread {
+      interface = (UIApplication.shared.connectedScenes.first as? UIWindowScene)?
+        .interfaceOrientation
+    } else {
+      interface = DispatchQueue.main.sync {
+        (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.interfaceOrientation
+      }
+    }
+    switch interface {
+    case .landscapeLeft: return 180
+    case .landscapeRight: return 0
+    case .portraitUpsideDown: return 270
+    default: return 90
+    }
+  }
+
+  private static func legacyOrientation(_ angle: CGFloat) -> AVCaptureVideoOrientation {
+    switch angle {
+    case 0: return .landscapeRight
+    case 180: return .landscapeLeft
+    case 270: return .portraitUpsideDown
+    default: return .portrait
+    }
   }
 
   func start() {
@@ -85,6 +153,7 @@ final class CameraSession: NSObject, FlutterTexture, AVCaptureVideoDataOutputSam
   }
 
   func stop() {
+    NotificationCenter.default.removeObserver(self)
     sessionQueue.async { [weak self] in
       guard let self else { return }
       if self.session.isRunning { self.session.stopRunning() }

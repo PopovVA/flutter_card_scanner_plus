@@ -5,6 +5,8 @@ import android.graphics.RectF
 import android.os.Handler
 import android.os.Looper
 import android.util.Size
+import android.view.OrientationEventListener
+import android.view.Surface
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
@@ -38,6 +40,9 @@ class CameraSession(
     @Volatile
     var regionOfInterest: RectF? = null
 
+    /** Called when a device rotation changes the shape of the preview. */
+    var onPreviewChanged: ((PreviewInfo) -> Unit)? = null
+
     private val registry = LifecycleRegistry(this)
     override val lifecycle: Lifecycle get() = registry
 
@@ -50,6 +55,8 @@ class CameraSession(
     private var camera: Camera? = null
     private var preview: Preview? = null
     private var onReady: ((PreviewInfo) -> Unit)? = null
+    private var lastInfo: PreviewInfo? = null
+    private var orientationListener: OrientationEventListener? = null
     private val busy = AtomicBoolean(false)
     private var lastRun = 0L
 
@@ -100,6 +107,7 @@ class CameraSession(
         registry.currentState = Lifecycle.State.STARTED
         provider.unbindAll()
         camera = provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
+        startOrientationUpdates(preview, analysis)
 
         // Surface can be dropped while backgrounded (Impeller); re-request on return.
         producer.setCallback(object : TextureRegistry.SurfaceProducer.Callback {
@@ -115,13 +123,58 @@ class CameraSession(
         val size = request.resolution
         producer.setSize(size.width, size.height)
         request.provideSurface(producer.surface, mainExecutor) { }
+        // The listener stays attached: CameraX reports a new transform on
+        // every rotation, which is what keeps the preview upright.
         request.setTransformationInfoListener(mainExecutor) { info ->
-            val ready = onReady ?: return@setTransformationInfoListener
-            onReady = null
             val rotation = info.rotationDegrees
-            val upright = if (rotation == 90 || rotation == 270) size.height to size.width else size.width to size.height
-            ready(PreviewInfo(producer.id(), upright.first, upright.second, rotation))
+            val upright = if (rotation == 90 || rotation == 270) {
+                size.height to size.width
+            } else {
+                size.width to size.height
+            }
+            val next = PreviewInfo(producer.id(), upright.first, upright.second, rotation)
+            val ready = onReady
+            if (ready != null) {
+                onReady = null
+                lastInfo = next
+                ready(next)
+                return@setTransformationInfoListener
+            }
+            val previous = lastInfo
+            if (previous == null ||
+                previous.rotation != next.rotation ||
+                previous.width != next.width ||
+                previous.height != next.height
+            ) {
+                lastInfo = next
+                onPreviewChanged?.invoke(next)
+            }
         }
+    }
+
+    /**
+     * Follows device rotation so both use cases target the current display.
+     * ImageAnalysis matters most: ML Kit reads rotationDegrees off the frame,
+     * and a stale target leaves it reading sideways text.
+     */
+    private fun startOrientationUpdates(preview: Preview, analysis: ImageAnalysis) {
+        orientationListener?.disable()
+        val listener = object : OrientationEventListener(context) {
+            override fun onOrientationChanged(orientation: Int) {
+                if (orientation == ORIENTATION_UNKNOWN) return
+                val rotation = when {
+                    orientation >= 315 || orientation < 45 -> Surface.ROTATION_0
+                    orientation < 135 -> Surface.ROTATION_270
+                    orientation < 225 -> Surface.ROTATION_180
+                    else -> Surface.ROTATION_90
+                }
+                if (rotation == preview.targetRotation) return
+                preview.targetRotation = rotation
+                analysis.targetRotation = rotation
+            }
+        }
+        orientationListener = listener
+        if (listener.canDetectOrientation()) listener.enable()
     }
 
     fun setTorch(enabled: Boolean) {
@@ -129,6 +182,8 @@ class CameraSession(
     }
 
     fun stop() {
+        orientationListener?.disable()
+        orientationListener = null
         mainHandler.post {
             registry.currentState = Lifecycle.State.DESTROYED
             provider?.unbindAll()
