@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../controller/card_scanner_controller.dart';
+import '../core/card_scan_result.dart';
 
 /// Default overlay: dimmed background with a card-shaped cutout, corner
 /// brackets that turn [successColor] as fields are recognized, and the
@@ -44,63 +45,85 @@ class CardFrameOverlay extends StatelessWidget {
         ? Color.lerp(frameColor, successColor, 0.6)!
         : frameColor;
 
-    return Stack(
-      fit: StackFit.expand,
+    // LayoutBuilder sits outside the Stack so Positioned stays a direct
+    // child of it, which Flutter requires.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final roomBelow = constraints.maxHeight - cardRect.bottom;
+        final fitsBelow = roomBelow >= _fieldsMinHeight;
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            CustomPaint(
+              painter: _FramePainter(
+                cardRect: cardRect,
+                scrimColor: scrimColor,
+                color: color,
+                cornerRadius: cornerRadius,
+                strokeWidth: strokeWidth,
+              ),
+            ),
+            // Below the frame when there is room, otherwise pinned to the
+            // bottom of the view: in landscape the frame nearly fills the
+            // height and there is nothing underneath it.
+            if (showFields)
+              Positioned(
+                left: fitsBelow ? cardRect.left : 16,
+                width: fitsBelow ? cardRect.width : constraints.maxWidth - 32,
+                top: fitsBelow ? cardRect.bottom + 24 : null,
+                bottom: fitsBelow ? null : 12,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: fitsBelow ? null : const Color(0x99000000),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Padding(
+                    padding: EdgeInsets.all(fitsBelow ? 0 : 8),
+                    child: _fields(result),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  static const _fieldsMinHeight = 76.0;
+
+  Widget _fields(CardScanResult result) => DefaultTextStyle(
+    style: const TextStyle(
+      color: Colors.white,
+      fontSize: 18,
+      fontFeatures: [FontFeature.tabularFigures()],
+    ),
+    textAlign: TextAlign.center,
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        CustomPaint(
-          painter: _FramePainter(
-            cardRect: cardRect,
-            scrimColor: scrimColor,
-            color: color,
-            cornerRadius: cornerRadius,
-            strokeWidth: strokeWidth,
+        if (!result.hasNumber && !result.hasExpiry)
+          Text(
+            hint ?? 'Align the card inside the frame',
+            style: const TextStyle(fontSize: 15, color: Colors.white70),
           ),
-        ),
-        if (showFields)
-          Positioned(
-            left: cardRect.left,
-            width: cardRect.width,
-            top: cardRect.bottom + 24,
-            child: DefaultTextStyle(
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontFeatures: [FontFeature.tabularFigures()],
-              ),
-              textAlign: TextAlign.center,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (!result.hasNumber && !result.hasExpiry)
-                    Text(
-                      hint ?? 'Align the card inside the frame',
-                      style: const TextStyle(
-                        fontSize: 15,
-                        color: Colors.white70,
-                      ),
-                    ),
-                  if (result.hasNumber)
-                    Text(
-                      result.formattedNumber!,
-                      style: const TextStyle(fontSize: 22, letterSpacing: 1.5),
-                    ),
-                  if (result.hasExpiry || result.hasName)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: Text(
-                        [
-                          if (result.hasName) result.cardholderName!,
-                          if (result.hasExpiry) result.formattedExpiry!,
-                        ].join('   '),
-                      ),
-                    ),
-                ],
-              ),
+        if (result.hasNumber)
+          Text(
+            result.formattedNumber!,
+            style: const TextStyle(fontSize: 22, letterSpacing: 1.5),
+          ),
+        if (result.hasExpiry || result.hasName)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              [
+                if (result.hasName) result.cardholderName!,
+                if (result.hasExpiry) result.formattedExpiry!,
+              ].join('   '),
             ),
           ),
       ],
-    );
-  }
+    ),
+  );
 }
 
 class _FramePainter extends CustomPainter {

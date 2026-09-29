@@ -28,9 +28,11 @@ class CardScannerView extends StatefulWidget {
     this.autoStart = true,
     this.cardAspectRatio = CardScannerView.iso7810AspectRatio,
     this.frameWidthFraction = 0.88,
+    this.frameHeightFraction = 0.6,
     this.frameAlignment = const Alignment(0, -0.2),
     this.backgroundColor = Colors.black,
-  }) : assert(frameWidthFraction > 0 && frameWidthFraction <= 1);
+  }) : assert(frameWidthFraction > 0 && frameWidthFraction <= 1),
+       assert(frameHeightFraction > 0 && frameHeightFraction <= 1);
 
   /// ID-1 card: 85.60 × 53.98 mm.
   static const double iso7810AspectRatio = 85.60 / 53.98;
@@ -43,8 +45,13 @@ class CardScannerView extends StatefulWidget {
 
   final double cardAspectRatio;
 
-  /// Frame width relative to the view width.
+  /// Frame width relative to the view width. The frame never exceeds this,
+  /// nor [frameHeightFraction] of the height, so it fits in any orientation.
   final double frameWidthFraction;
+
+  /// Frame height relative to the view height. This is what keeps the frame
+  /// on screen in landscape, where 88% of the width is taller than the view.
+  final double frameHeightFraction;
 
   /// Where the frame sits within the view.
   final Alignment frameAlignment;
@@ -70,9 +77,20 @@ class _CardScannerViewState extends State<CardScannerView> {
     }
   }
 
+  /// The largest card shaped rect that fits both fractions, centred by
+  /// [CardScannerView.frameAlignment].
   Rect _cardRect(Size size) {
-    final width = size.width * widget.frameWidthFraction;
-    final height = width / widget.cardAspectRatio;
+    var width = size.width * widget.frameWidthFraction;
+    var height = width / widget.cardAspectRatio;
+
+    // Landscape: the width driven height would run off the screen, so the
+    // height becomes the limit instead.
+    final maxHeight = size.height * widget.frameHeightFraction;
+    if (height > maxHeight) {
+      height = maxHeight;
+      width = height * widget.cardAspectRatio;
+    }
+
     final free = Size(size.width - width, size.height - height);
     final origin = widget.frameAlignment.alongSize(free);
     return Rect.fromLTWH(origin.dx, origin.dy, width, height);
