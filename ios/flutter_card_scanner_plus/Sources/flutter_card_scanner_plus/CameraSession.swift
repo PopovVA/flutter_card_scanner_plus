@@ -131,7 +131,9 @@ final class CameraSession: NSObject, FlutterTexture, AVCaptureVideoDataOutputSam
   /// updates the preview shape to match.
   private func applyOrientation(notify: Bool) {
     let angle = Self.rotationAngle()
-    let landscape = angle == 90 || angle == 270
+    // 90 and 270 turn the buffer on its side, so the delivered frame has
+    // the sensor's dimensions swapped. Portrait is 90, not 0.
+    let quarterTurn = angle == 90 || angle == 270
 
     if let connection = videoOutput?.connection(with: .video) {
       if #available(iOS 17.0, *) {
@@ -143,9 +145,9 @@ final class CameraSession: NSObject, FlutterTexture, AVCaptureVideoDataOutputSam
       }
     }
 
-    let size = landscape
-      ? CGSize(width: sensorSize.width, height: sensorSize.height)
-      : CGSize(width: sensorSize.height, height: sensorSize.width)
+    let size = quarterTurn
+      ? CGSize(width: sensorSize.height, height: sensorSize.width)
+      : CGSize(width: sensorSize.width, height: sensorSize.height)
     let changed = size != previewSize
     previewSize = size
     if notify && changed { onPreviewChanged?() }
