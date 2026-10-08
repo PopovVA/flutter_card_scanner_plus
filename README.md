@@ -280,6 +280,7 @@ Everything in step 4 and 5 is plain Dart with no platform dependencies, and it i
 ## Limitations
 
 - Landscape works, but a card is easiest to frame with the phone upright, so the default frame is sized for portrait.
+- The preview follows the orientation of your UI, not of the handset. An app locked to portrait keeps an upright guide and an upright preview whichever way the phone is held.
 - The CVV / CVC is never read, by design. It is the proof that the cardholder is entering it knowingly, and capturing it from the camera would put every app using this package deeper into PCI DSS scope. Ask for it in a text field after the scan.
 - Only the networks listed above. Anything else is rejected even when the number is Luhn valid, and so are the few UnionPay ranges issued outside the Luhn checksum.
 - Cardholder name detection is heuristic. Embossed names on busy backgrounds, names with non Latin characters, and cards without a printed name will come back as `null`.

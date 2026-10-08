@@ -1,11 +1,13 @@
 package dev.apissystems.flutter_card_scanner_plus
 
+import android.app.Activity
 import android.content.Context
 import android.graphics.RectF
+import android.hardware.display.DisplayManager
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Size
-import android.view.OrientationEventListener
 import android.view.Surface
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
@@ -61,7 +63,7 @@ class CameraSession(
     private var analysis: ImageAnalysis? = null
     private var onReady: ((PreviewInfo) -> Unit)? = null
     private var lastInfo: PreviewInfo? = null
-    private var orientationListener: OrientationEventListener? = null
+    private var displayListener: DisplayManager.DisplayListener? = null
     private val busy = AtomicBoolean(false)
     private var lastRun = 0L
 
@@ -119,7 +121,7 @@ class CameraSession(
         )
         this.camera = camera
         observeState(camera)
-        startOrientationUpdates(preview, analysis)
+        startRotationUpdates(preview, analysis)
 
         // Surface can be dropped while backgrounded (Impeller); re-request on return.
         producer.setCallback(object : TextureRegistry.SurfaceProducer.Callback {
@@ -165,28 +167,43 @@ class CameraSession(
     }
 
     /**
-     * Follows device rotation so both use cases target the current display.
-     * ImageAnalysis matters most: ML Kit reads rotationDegrees off the frame,
-     * and a stale target leaves it reading sideways text.
+     * Follows the rotation of the display the activity is drawn on, so both
+     * use cases target what the user is looking at. ImageAnalysis matters
+     * most: ML Kit reads rotationDegrees off the frame, and a stale target
+     * leaves it reading sideways text.
+     *
+     * The display rather than the device: an app locked to portrait keeps an
+     * upright UI however the phone is held, and turning the buffer there
+     * would leave the preview sideways inside an upright guide.
      */
-    private fun startOrientationUpdates(preview: Preview, analysis: ImageAnalysis) {
-        orientationListener?.disable()
-        val listener = object : OrientationEventListener(context) {
-            override fun onOrientationChanged(orientation: Int) {
-                if (orientation == ORIENTATION_UNKNOWN) return
-                val rotation = when {
-                    orientation >= 315 || orientation < 45 -> Surface.ROTATION_0
-                    orientation < 135 -> Surface.ROTATION_270
-                    orientation < 225 -> Surface.ROTATION_180
-                    else -> Surface.ROTATION_90
-                }
-                if (rotation == preview.targetRotation) return
-                preview.targetRotation = rotation
-                analysis.targetRotation = rotation
-            }
+    private fun startRotationUpdates(preview: Preview, analysis: ImageAnalysis) {
+        applyRotation(preview, analysis)
+        val manager = context.getSystemService(DisplayManager::class.java) ?: return
+        val listener = object : DisplayManager.DisplayListener {
+            override fun onDisplayAdded(displayId: Int) = Unit
+            override fun onDisplayRemoved(displayId: Int) = Unit
+            override fun onDisplayChanged(displayId: Int) = applyRotation(preview, analysis)
         }
-        orientationListener = listener
-        if (listener.canDetectOrientation()) listener.enable()
+        displayListener = listener
+        manager.registerDisplayListener(listener, mainHandler)
+    }
+
+    private fun applyRotation(preview: Preview, analysis: ImageAnalysis) {
+        val rotation = displayRotation()
+        if (rotation == preview.targetRotation) return
+        preview.targetRotation = rotation
+        analysis.targetRotation = rotation
+    }
+
+    @Suppress("DEPRECATION")
+    private fun displayRotation(): Int {
+        val activity = context as? Activity ?: return Surface.ROTATION_0
+        val display = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            activity.display
+        } else {
+            activity.windowManager.defaultDisplay
+        }
+        return display?.rotation ?: Surface.ROTATION_0
     }
 
     fun setTorch(enabled: Boolean) {
@@ -201,8 +218,10 @@ class CameraSession(
      * preview black on reopen.
      */
     fun stop(onDone: () -> Unit) {
-        orientationListener?.disable()
-        orientationListener = null
+        displayListener?.let {
+            context.getSystemService(DisplayManager::class.java)?.unregisterDisplayListener(it)
+        }
+        displayListener = null
         onPreviewChanged = null
         onError = null
 

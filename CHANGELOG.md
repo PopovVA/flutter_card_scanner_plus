@@ -58,6 +58,14 @@
 
 ### Orientation
 
+- Android follows the rotation of the display the activity is drawn on,
+  through a `DisplayManager.DisplayListener`, rather than the physical
+  orientation of the device. An app locked to portrait keeps an upright
+  guide however the phone is held, and turning the buffer there left the
+  preview sideways inside it.
+- iOS reads the interface orientation on the main thread only, and picks the
+  foreground window scene explicitly. `connectedScenes` is a set, so taking
+  the first element could read the wrong window.
 - A frame recognized before a rotation reached the camera is dropped instead
   of scored. Its boxes are in the previous orientation and were filtered by
   the previous region of interest, so it could move a field relative to the

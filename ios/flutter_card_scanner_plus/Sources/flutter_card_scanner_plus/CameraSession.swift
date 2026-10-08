@@ -129,7 +129,20 @@ final class CameraSession: NSObject, FlutterTexture, AVCaptureVideoDataOutputSam
 
   /// Points the video connection at the current interface orientation and
   /// updates the preview shape to match.
+  ///
+  /// The interface rather than the device, and so not
+  /// AVCaptureDevice.RotationCoordinator, which reports the device's own
+  /// rotation: an app locked to portrait keeps an upright guide however the
+  /// phone is held, and turning the buffer there would leave the preview
+  /// sideways inside it.
+  ///
+  /// Main thread only, because that is where the interface orientation can
+  /// be read.
   private func applyOrientation(notify: Bool) {
+    guard Thread.isMainThread else {
+      DispatchQueue.main.async { [weak self] in self?.applyOrientation(notify: notify) }
+      return
+    }
     let angle = Self.rotationAngle()
     // 90 and 270 turn the buffer on its side, so the delivered frame has
     // the sensor's dimensions swapped. Portrait is 90, not 0.
@@ -154,17 +167,14 @@ final class CameraSession: NSObject, FlutterTexture, AVCaptureVideoDataOutputSam
   }
 
   /// Clockwise angle the buffer needs so its top matches the top of the UI.
+  ///
+  /// Call on the main thread only.
   private static func rotationAngle() -> CGFloat {
-    let interface: UIInterfaceOrientation?
-    if Thread.isMainThread {
-      interface = (UIApplication.shared.connectedScenes.first as? UIWindowScene)?
-        .interfaceOrientation
-    } else {
-      interface = DispatchQueue.main.sync {
-        (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.interfaceOrientation
-      }
-    }
-    switch interface {
+    // connectedScenes is a Set, so the active window scene is picked
+    // explicitly rather than taken from an arbitrary position.
+    let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+    let scene = scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
+    switch scene?.interfaceOrientation {
     case .landscapeLeft: return 180
     case .landscapeRight: return 0
     case .portraitUpsideDown: return 270
