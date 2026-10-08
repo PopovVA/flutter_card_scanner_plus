@@ -66,11 +66,7 @@ abstract final class CardFrameParser {
     // unusable onto an otherwise complete name.
     final name =
         NameParser.parseRows(parts, panBox: pan?.box, expiryBox: expiry?.box) ??
-        NameParser.parse(
-          frame.lines,
-          panBox: pan?.box,
-          expiryBox: expiry?.box,
-        );
+        NameParser.parse(frame.lines, panBox: pan?.box, expiryBox: expiry?.box);
 
     return FrameParseResult(pan: pan, expiry: expiry, name: name);
   }
