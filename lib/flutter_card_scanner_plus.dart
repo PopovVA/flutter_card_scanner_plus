@@ -1,8 +1,8 @@
 /// On-device bank card scanner for Flutter.
 ///
-/// Recognizes Visa, Mastercard and American Express cards using the
-/// platform OCR engine (Vision on iOS, ML Kit on Android). Frames never
-/// leave the device.
+/// Recognizes Visa, Mastercard, American Express, Discover, JCB, Diners
+/// Club and UnionPay cards using the platform OCR engine (Vision on iOS,
+/// ML Kit on Android). Frames never leave the device.
 library;
 
 export 'src/core/card_brand.dart';

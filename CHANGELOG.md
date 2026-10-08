@@ -1,3 +1,44 @@
+## 0.2.0 (unreleased)
+
+### Breaking
+
+- `CardBrand` gained `discover`, `jcb`, `diners` and `unionpay`. A `switch`
+  over the enum without a `default` clause stops compiling until the new
+  values are handled.
+
+### Recognition
+
+- Discover, JCB, Diners Club and UnionPay cards are read. Diners Club means
+  the shortest accepted number is now 14 digits. UnionPay ranges issued
+  outside the Luhn checksum are still rejected.
+- `CardBrand.groupingFor(length)` formats a number by its length, which is
+  what Diners Club needs: 4-6-4 on a 14 digit card, the usual blocks on 16.
+- A cardholder name split across several OCR boxes is read. Engines return
+  a printed name as one box per word, so "ADA" and "LOVELACE" only became a
+  name once the row was assembled.
+- A logo, a tier label or a stray number sharing the name's row no longer
+  hides the name: words that cannot belong to a name are dropped from both
+  ends of the row before what is left is tested. A row of nothing else,
+  "VISA PLATINUM", still yields nothing.
+- The name is ranked by where it sits relative to the number: flush with
+  its left edge, close above or below it. Text starting past the middle of
+  the number is penalised, which is what let "RECYCLED PLASTIC", printed
+  beside the name block, win on one card. Material claims are stop words
+  now as well.
+- `CardFrameParser.groupIntoRows` is public, and `groupRowParts` returns the
+  same rows with their original lines, so a caller can drop some of them and
+  still know where the rest sat.
+- `NameParser.parseRows` takes those rows. `NameParser.parse` still takes
+  plain lines and treats each as its own row.
+- `CardScannerView.frameRegionPadding` replaces a fixed margin of 15% of the
+  frame height that was added around the frame before OCR. It defaults to 0,
+  so OCR reads exactly what the user sees inside the frame. That margin is
+  how text next to the card, a keyboard for instance, supplied a cardholder
+  name.
+- The region of interest is recalculated when the frame geometry or the
+  controller changes, not only when the view is resized. A replaced
+  controller is also started, so the preview is not left black.
+
 ## 0.1.3
 
 Housekeeping only; the public API is unchanged.

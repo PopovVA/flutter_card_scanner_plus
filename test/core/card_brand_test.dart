@@ -34,10 +34,46 @@ void main() {
       expect(CardBrand.detect('351111111111111'), isNull);
     });
 
-    test('unsupported networks', () {
-      expect(CardBrand.detect('6011111111111117'), isNull); // Discover
-      expect(CardBrand.detect('3530111333300000'), isNull); // JCB
-      expect(CardBrand.detect('30569309025904'), isNull); // Diners
+    test('discover', () {
+      expect(CardBrand.detect('6011111111111117'), CardBrand.discover);
+      expect(CardBrand.detect('6011000990139424'), CardBrand.discover);
+      expect(CardBrand.detect('6445644564456445'), CardBrand.discover);
+      expect(CardBrand.detect('6490000000000004'), CardBrand.discover);
+      expect(CardBrand.detect('6500000000000002'), CardBrand.discover);
+      expect(CardBrand.detect('6430000000000000'), isNull);
+      expect(CardBrand.detect('6600000000000000'), isNull);
+    });
+
+    test('jcb', () {
+      expect(CardBrand.detect('3530111333300000'), CardBrand.jcb);
+      expect(CardBrand.detect('3566002020360505'), CardBrand.jcb);
+      expect(CardBrand.detect('3528100000000005'), CardBrand.jcb);
+      expect(CardBrand.detect('3527000000000000'), isNull);
+      expect(CardBrand.detect('3590000000000000'), isNull);
+    });
+
+    test('diners club', () {
+      expect(CardBrand.detect('30569309025904'), CardBrand.diners);
+      expect(CardBrand.detect('38520000023237'), CardBrand.diners);
+      expect(CardBrand.detect('30950000000000'), CardBrand.diners);
+      expect(CardBrand.detect('39000000000005'), CardBrand.diners);
+      expect(CardBrand.detect('30600000000000'), isNull);
+    });
+
+    test('unionpay', () {
+      expect(CardBrand.detect('6200000000000005'), CardBrand.unionpay);
+      expect(CardBrand.detect('8171999927660000'), CardBrand.unionpay);
+      expect(CardBrand.detect('8100000000000002'), CardBrand.unionpay);
+    });
+
+    test('the range Discover and UnionPay share goes to unionpay', () {
+      expect(CardBrand.detect('6221260000000000'), CardBrand.unionpay);
+      expect(CardBrand.detect('6229250000000000'), CardBrand.unionpay);
+    });
+
+    test('still unsupported', () {
+      expect(CardBrand.detect('5061000000000000'), isNull); // Verve
+      expect(CardBrand.detect('5018000000000000'), isNull); // Maestro
       expect(CardBrand.detect(''), isNull);
     });
   });
@@ -51,6 +87,22 @@ void main() {
       expect(CardBrand.mastercard.matchesLength(15), isFalse);
       expect(CardBrand.amex.matchesLength(15), isTrue);
       expect(CardBrand.amex.matchesLength(16), isFalse);
+      expect(CardBrand.discover.matchesLength(16), isTrue);
+      expect(CardBrand.discover.matchesLength(19), isTrue);
+      expect(CardBrand.discover.matchesLength(15), isFalse);
+      expect(CardBrand.jcb.matchesLength(17), isTrue);
+      expect(CardBrand.jcb.matchesLength(15), isFalse);
+      expect(CardBrand.diners.matchesLength(14), isTrue);
+      expect(CardBrand.diners.matchesLength(15), isFalse);
+      expect(CardBrand.unionpay.matchesLength(19), isTrue);
+    });
+
+    test('every brand has a name and at least one length', () {
+      for (final brand in CardBrand.values) {
+        expect(brand.displayName, isNotEmpty, reason: brand.name);
+        expect(brand.validLengths, isNotEmpty, reason: brand.name);
+        expect(brand.grouping, isNotEmpty, reason: brand.name);
+      }
     });
   });
 
@@ -66,6 +118,15 @@ void main() {
     });
     test('4-6-5 for amex', () {
       expect(CardBrand.amex.format('378282246310005'), '3782 822463 10005');
+    });
+    test('4-6-4 for a 14 digit diners card', () {
+      expect(CardBrand.diners.format('30569309025904'), '3056 930902 5904');
+    });
+    test('a 16 digit diners card uses the usual blocks', () {
+      expect(
+        CardBrand.diners.format('3056930902590400'),
+        '3056 9309 0259 0400',
+      );
     });
   });
 }

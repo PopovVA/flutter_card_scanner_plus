@@ -36,7 +36,8 @@ abstract final class CardFrameParser {
   static FrameParseResult parse(RecognizedFrame frame, {DateTime? now}) {
     if (frame.lines.isEmpty) return FrameParseResult.empty;
 
-    final rows = groupIntoRows(frame.lines);
+    final parts = groupRowParts(frame.lines);
+    final rows = parts.map(_merge).toList(growable: false);
 
     PanCandidate? pan;
     for (final row in rows) {
@@ -59,19 +60,33 @@ abstract final class CardFrameParser {
       if (expiry == null || candidate.compareTo(expiry) > 0) expiry = candidate;
     }
 
-    final name = NameParser.parse(
-      frame.lines,
-      panBox: pan?.box,
-      expiryBox: expiry?.box,
-    );
+    // Rows first: OCR engines return a printed name as one box per word,
+    // so "ADA" and "LOVELACE" only read as a name once joined. Raw lines
+    // are the fallback for the opposite case, a row that glued something
+    // unusable onto an otherwise complete name.
+    final name =
+        NameParser.parseRows(parts, panBox: pan?.box, expiryBox: expiry?.box) ??
+        NameParser.parse(frame.lines, panBox: pan?.box, expiryBox: expiry?.box);
 
     return FrameParseResult(pan: pan, expiry: expiry, name: name);
   }
 
   /// Merges [lines] that sit on the same horizontal row into one
   /// [TextLine], ordered left to right. Rows are returned top to bottom.
-  @visibleForTesting
-  static List<TextLine> groupIntoRows(List<TextLine> lines) {
+  ///
+  /// Useful on its own when feeding OCR output to something other than
+  /// [parse]: numbers, dates and names are all printed as one visual line
+  /// that engines may split into several boxes.
+  static List<TextLine> groupIntoRows(List<TextLine> lines) =>
+      groupRowParts(lines).map(_merge).toList(growable: false);
+
+  /// Same grouping as [groupIntoRows], but each row keeps its original
+  /// lines, left to right. Rows are returned top to bottom.
+  ///
+  /// Keeping the parts lets a caller drop some of them and still know where
+  /// the rest sat, which is how the cardholder name survives sharing a row
+  /// with a logo.
+  static List<List<TextLine>> groupRowParts(List<TextLine> lines) {
     final sorted = [...lines]
       ..sort((a, b) => a.box.centerY.compareTo(b.box.centerY));
     final rows = <List<TextLine>>[];
@@ -84,20 +99,22 @@ abstract final class CardFrameParser {
       }
     }
 
-    return rows
-        .map((row) {
-          if (row.length == 1) return row.first;
-          row.sort((a, b) => a.box.left.compareTo(b.box.left));
-          final box = row.map((l) => l.box).reduce((a, b) => a.union(b));
-          final confidence =
-              row.map((l) => l.confidence).reduce((a, b) => a + b) / row.length;
-          return TextLine(
-            text: row.map((l) => l.text.trim()).join(' '),
-            box: box,
-            confidence: confidence,
-          );
-        })
-        .toList(growable: false);
+    for (final row in rows) {
+      row.sort((a, b) => a.box.left.compareTo(b.box.left));
+    }
+    return rows;
+  }
+
+  static TextLine _merge(List<TextLine> row) {
+    if (row.length == 1) return row.first;
+    final box = row.map((l) => l.box).reduce((a, b) => a.union(b));
+    final confidence =
+        row.map((l) => l.confidence).reduce((a, b) => a + b) / row.length;
+    return TextLine(
+      text: row.map((l) => l.text.trim()).join(' '),
+      box: box,
+      confidence: confidence,
+    );
   }
 
   static bool _sameRow(TextLine a, TextLine b) {

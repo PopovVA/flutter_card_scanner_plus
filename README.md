@@ -12,7 +12,7 @@
 
 Scan a payment card with the camera and get its number, expiry date and cardholder name back as a typed result. Recognition runs fully on the device using the platform OCR engines: Vision on iOS and ML Kit on Android. There is no third party camera plugin, no cloud service and no network access.
 
-Supported networks: **Visa**, **Mastercard**, **American Express**.
+Supported networks: **Visa**, **Mastercard**, **American Express**, **Discover**, **JCB**, **Diners Club**, **UnionPay**.
 
 ## Highlights
 
@@ -236,7 +236,7 @@ Everything in step 4 and 5 is plain Dart with no platform dependencies, and it i
 
 - Landscape works, but a card is easiest to frame with the phone upright, so the default frame is sized for portrait.
 - The CVV / CVC is never read, by design. It is the proof that the cardholder is entering it knowingly, and capturing it from the camera would put every app using this package deeper into PCI DSS scope. Ask for it in a text field after the scan.
-- Visa, Mastercard and American Express only. Other networks are rejected even when the number is Luhn valid.
+- Only the networks listed above. Anything else is rejected even when the number is Luhn valid, and so are the few UnionPay ranges issued outside the Luhn checksum.
 - Cardholder name detection is heuristic. Embossed names on busy backgrounds, names with non Latin characters, and cards without a printed name will come back as `null`.
 
 ## Example
