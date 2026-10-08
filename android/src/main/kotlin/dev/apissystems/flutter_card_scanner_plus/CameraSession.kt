@@ -1,16 +1,19 @@
 package dev.apissystems.flutter_card_scanner_plus
 
+import android.app.Activity
 import android.content.Context
 import android.graphics.RectF
+import android.hardware.display.DisplayManager
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Size
-import android.view.OrientationEventListener
 import android.view.Surface
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
+import androidx.camera.core.UseCase
 import androidx.camera.core.resolutionselector.AspectRatioStrategy
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
@@ -43,6 +46,9 @@ class CameraSession(
     /** Called when a device rotation changes the shape of the preview. */
     var onPreviewChanged: ((PreviewInfo) -> Unit)? = null
 
+    /** Called when the camera fails after it started. */
+    var onError: ((String, String) -> Unit)? = null
+
     private val registry = LifecycleRegistry(this)
     override val lifecycle: Lifecycle get() = registry
 
@@ -54,9 +60,10 @@ class CameraSession(
     private var provider: ProcessCameraProvider? = null
     private var camera: Camera? = null
     private var preview: Preview? = null
+    private var analysis: ImageAnalysis? = null
     private var onReady: ((PreviewInfo) -> Unit)? = null
     private var lastInfo: PreviewInfo? = null
-    private var orientationListener: OrientationEventListener? = null
+    private var displayListener: DisplayManager.DisplayListener? = null
     private val busy = AtomicBoolean(false)
     private var lastRun = 0L
 
@@ -90,6 +97,7 @@ class CameraSession(
             .setResolutionSelector(resolution)
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
             .build()
+        this.analysis = analysis
         analysis.setAnalyzer(analysisExecutor) { proxy ->
             val now = System.currentTimeMillis()
             if (busy.get() || now - lastRun < MIN_INTERVAL_MS) {
@@ -105,9 +113,15 @@ class CameraSession(
         }
 
         registry.currentState = Lifecycle.State.STARTED
-        provider.unbindAll()
-        camera = provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
-        startOrientationUpdates(preview, analysis)
+        // Bind to this session's own lifecycle and nothing else: the provider
+        // is process wide, and unbinding everything on it would tear down a
+        // session that another part of the app is still using.
+        val camera = provider.bindToLifecycle(
+            this, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis,
+        )
+        this.camera = camera
+        observeState(camera)
+        startRotationUpdates(preview, analysis)
 
         // Surface can be dropped while backgrounded (Impeller); re-request on return.
         producer.setCallback(object : TextureRegistry.SurfaceProducer.Callback {
@@ -153,45 +167,90 @@ class CameraSession(
     }
 
     /**
-     * Follows device rotation so both use cases target the current display.
-     * ImageAnalysis matters most: ML Kit reads rotationDegrees off the frame,
-     * and a stale target leaves it reading sideways text.
+     * Follows the rotation of the display the activity is drawn on, so both
+     * use cases target what the user is looking at. ImageAnalysis matters
+     * most: ML Kit reads rotationDegrees off the frame, and a stale target
+     * leaves it reading sideways text.
+     *
+     * The display rather than the device: an app locked to portrait keeps an
+     * upright UI however the phone is held, and turning the buffer there
+     * would leave the preview sideways inside an upright guide.
      */
-    private fun startOrientationUpdates(preview: Preview, analysis: ImageAnalysis) {
-        orientationListener?.disable()
-        val listener = object : OrientationEventListener(context) {
-            override fun onOrientationChanged(orientation: Int) {
-                if (orientation == ORIENTATION_UNKNOWN) return
-                val rotation = when {
-                    orientation >= 315 || orientation < 45 -> Surface.ROTATION_0
-                    orientation < 135 -> Surface.ROTATION_270
-                    orientation < 225 -> Surface.ROTATION_180
-                    else -> Surface.ROTATION_90
-                }
-                if (rotation == preview.targetRotation) return
-                preview.targetRotation = rotation
-                analysis.targetRotation = rotation
-            }
+    private fun startRotationUpdates(preview: Preview, analysis: ImageAnalysis) {
+        applyRotation(preview, analysis)
+        val manager = context.getSystemService(DisplayManager::class.java) ?: return
+        val listener = object : DisplayManager.DisplayListener {
+            override fun onDisplayAdded(displayId: Int) = Unit
+            override fun onDisplayRemoved(displayId: Int) = Unit
+            override fun onDisplayChanged(displayId: Int) = applyRotation(preview, analysis)
         }
-        orientationListener = listener
-        if (listener.canDetectOrientation()) listener.enable()
+        displayListener = listener
+        manager.registerDisplayListener(listener, mainHandler)
+    }
+
+    private fun applyRotation(preview: Preview, analysis: ImageAnalysis) {
+        val rotation = displayRotation()
+        if (rotation == preview.targetRotation) return
+        preview.targetRotation = rotation
+        analysis.targetRotation = rotation
+    }
+
+    @Suppress("DEPRECATION")
+    private fun displayRotation(): Int {
+        val activity = context as? Activity ?: return Surface.ROTATION_0
+        val display = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            activity.display
+        } else {
+            activity.windowManager.defaultDisplay
+        }
+        return display?.rotation ?: Surface.ROTATION_0
     }
 
     fun setTorch(enabled: Boolean) {
         camera?.cameraControl?.enableTorch(enabled)
     }
 
-    fun stop() {
-        orientationListener?.disable()
-        orientationListener = null
-        mainHandler.post {
+    /**
+     * Releases everything and then calls [onDone], on the main thread.
+     *
+     * The callback is what lets the Dart side await a stop: starting a new
+     * session while the previous teardown was still queued was leaving the
+     * preview black on reopen.
+     */
+    fun stop(onDone: () -> Unit) {
+        displayListener?.let {
+            context.getSystemService(DisplayManager::class.java)?.unregisterDisplayListener(it)
+        }
+        displayListener = null
+        onPreviewChanged = null
+        onError = null
+
+        val teardown = Runnable {
             registry.currentState = Lifecycle.State.DESTROYED
-            provider?.unbindAll()
+            val cases = listOfNotNull<UseCase>(preview, analysis)
+            if (cases.isNotEmpty()) provider?.unbind(*cases.toTypedArray())
             provider = null
             camera = null
             preview = null
+            analysis = null
             producer.release()
             analysisExecutor.shutdown()
+            onDone()
+        }
+
+        if (Looper.myLooper() == Looper.getMainLooper()) teardown.run()
+        else mainHandler.post(teardown)
+    }
+
+    /**
+     * Reports a camera that fails after it started: another app took it, the
+     * device ran out of resources, or it was disabled by policy. Without this
+     * the preview simply froze.
+     */
+    private fun observeState(camera: Camera) {
+        camera.cameraInfo.cameraState.observe(this) { state ->
+            val error = state.error ?: return@observe
+            onError?.invoke("cameraError", "CameraX reported error ${error.code}")
         }
     }
 

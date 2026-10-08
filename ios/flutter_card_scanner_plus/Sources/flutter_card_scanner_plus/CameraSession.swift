@@ -19,6 +19,9 @@ final class CameraSession: NSObject, FlutterTexture, AVCaptureVideoDataOutputSam
   /// Called when a device rotation changes the shape of the preview.
   var onPreviewChanged: (() -> Void)?
 
+  /// Called when the session fails after it started.
+  var onError: ((String, String) -> Void)?
+
   /// Normalized (top-left origin) area of the preview to run OCR on.
   var regionOfInterest: CGRect? {
     get { recognizer.regionOfInterest }
@@ -88,6 +91,36 @@ final class CameraSession: NSObject, FlutterTexture, AVCaptureVideoDataOutputSam
       selector: #selector(orientationChanged),
       name: UIDevice.orientationDidChangeNotification,
       object: nil)
+
+    // A session that fails after it started used to leave the preview
+    // frozen with nothing said about it.
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(runtimeError),
+      name: .AVCaptureSessionRuntimeError,
+      object: session)
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(interrupted),
+      name: .AVCaptureSessionWasInterrupted,
+      object: session)
+  }
+
+  @objc private func runtimeError(_ note: Notification) {
+    let error = note.userInfo?[AVCaptureSessionErrorKey] as? NSError
+    onError?("cameraError", error?.localizedDescription ?? "The capture session failed")
+  }
+
+  /// Only an interruption that will not end on its own is reported. A call
+  /// or Slide Over resumes the session by itself, and the app lifecycle
+  /// already covers going to the background.
+  @objc private func interrupted(_ note: Notification) {
+    guard
+      let raw = note.userInfo?[AVCaptureSessionInterruptionReasonKey] as? Int,
+      let reason = AVCaptureSession.InterruptionReason(rawValue: raw),
+      reason == .videoDeviceInUseByAnotherClient
+    else { return }
+    onError?("cameraInterrupted", "Another app is using the camera")
   }
 
   @objc private func orientationChanged() {
@@ -96,7 +129,20 @@ final class CameraSession: NSObject, FlutterTexture, AVCaptureVideoDataOutputSam
 
   /// Points the video connection at the current interface orientation and
   /// updates the preview shape to match.
+  ///
+  /// The interface rather than the device, and so not
+  /// AVCaptureDevice.RotationCoordinator, which reports the device's own
+  /// rotation: an app locked to portrait keeps an upright guide however the
+  /// phone is held, and turning the buffer there would leave the preview
+  /// sideways inside it.
+  ///
+  /// Main thread only, because that is where the interface orientation can
+  /// be read.
   private func applyOrientation(notify: Bool) {
+    guard Thread.isMainThread else {
+      DispatchQueue.main.async { [weak self] in self?.applyOrientation(notify: notify) }
+      return
+    }
     let angle = Self.rotationAngle()
     // 90 and 270 turn the buffer on its side, so the delivered frame has
     // the sensor's dimensions swapped. Portrait is 90, not 0.
@@ -121,17 +167,14 @@ final class CameraSession: NSObject, FlutterTexture, AVCaptureVideoDataOutputSam
   }
 
   /// Clockwise angle the buffer needs so its top matches the top of the UI.
+  ///
+  /// Call on the main thread only.
   private static func rotationAngle() -> CGFloat {
-    let interface: UIInterfaceOrientation?
-    if Thread.isMainThread {
-      interface = (UIApplication.shared.connectedScenes.first as? UIWindowScene)?
-        .interfaceOrientation
-    } else {
-      interface = DispatchQueue.main.sync {
-        (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.interfaceOrientation
-      }
-    }
-    switch interface {
+    // connectedScenes is a Set, so the active window scene is picked
+    // explicitly rather than taken from an arbitrary position.
+    let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+    let scene = scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
+    switch scene?.interfaceOrientation {
     case .landscapeLeft: return 180
     case .landscapeRight: return 0
     case .portraitUpsideDown: return 270
@@ -154,18 +197,31 @@ final class CameraSession: NSObject, FlutterTexture, AVCaptureVideoDataOutputSam
     }
   }
 
-  func stop() {
+  /// Stops capturing, releases the texture and then calls [completion] on
+  /// the main thread.
+  ///
+  /// The completion is what lets the Dart side await a stop. Starting a new
+  /// session while the previous one was still being torn down on this queue
+  /// was leaving the preview black on reopen.
+  func stop(completion: @escaping () -> Void) {
     NotificationCenter.default.removeObserver(self)
+    onPreviewChanged = nil
+    onError = nil
+
     sessionQueue.async { [weak self] in
-      guard let self else { return }
+      guard let self else {
+        DispatchQueue.main.async(execute: completion)
+        return
+      }
       if self.session.isRunning { self.session.stopRunning() }
       self.setTorch(false)
-      DispatchQueue.main.async {
-        self.textures.unregisterTexture(self.textureId)
-      }
       self.bufferLock.lock()
       self.latestBuffer = nil
       self.bufferLock.unlock()
+      DispatchQueue.main.async {
+        self.textures.unregisterTexture(self.textureId)
+        completion()
+      }
     }
   }
 

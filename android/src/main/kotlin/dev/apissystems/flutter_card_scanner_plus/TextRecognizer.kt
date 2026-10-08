@@ -14,10 +14,13 @@ import java.io.ByteArrayInputStream
 object TextRecognizer {
     private val client by lazy { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
 
+    /** Share of a line's area that has to lie inside the guide to keep it. */
+    private const val MIN_INSIDE = 0.7
+
     /**
      * Recognizes text in a camera frame. Always closes [proxy] when done.
      * Boxes are normalized to the upright frame; [roi] (normalized, upright)
-     * filters lines whose center lies outside it.
+     * drops lines that lie mostly outside it.
      */
     @androidx.annotation.OptIn(androidx.camera.core.ExperimentalGetImage::class)
     fun process(proxy: ImageProxy, roi: RectF?, callback: (Map<String, Any>) -> Unit) {
@@ -59,6 +62,24 @@ object TextRecognizer {
             .addOnFailureListener { callback(mapOf("lines" to emptyList<Any>())) }
     }
 
+    /**
+     * Whether most of a line sits inside the guide.
+     *
+     * This replaces a test on the line's centre, which kept a line that was
+     * half outside. That is how text beside the card, a keyboard for
+     * instance, offered itself as a cardholder name.
+     */
+    private fun mostlyInside(roi: RectF, left: Double, top: Double, w: Double, h: Double): Boolean {
+        val area = w * h
+        if (area <= 0.0) {
+            return roi.contains((left + w / 2).toFloat(), (top + h / 2).toFloat())
+        }
+        val overlapW = minOf(left + w, roi.right.toDouble()) - maxOf(left, roi.left.toDouble())
+        val overlapH = minOf(top + h, roi.bottom.toDouble()) - maxOf(top, roi.top.toDouble())
+        if (overlapW <= 0.0 || overlapH <= 0.0) return false
+        return overlapW * overlapH / area >= MIN_INSIDE
+    }
+
     private fun uprightSize(width: Int, height: Int, rotation: Int): Pair<Int, Int> =
         if (rotation == 90 || rotation == 270) height to width else width to height
 
@@ -71,7 +92,7 @@ object TextRecognizer {
                 val top = box.top.toDouble() / height
                 val w = box.width().toDouble() / width
                 val h = box.height().toDouble() / height
-                if (roi != null && !roi.contains((left + w / 2).toFloat(), (top + h / 2).toFloat())) continue
+                if (roi != null && !mostlyInside(roi, left, top, w, h)) continue
                 lines.add(
                     mapOf(
                         "text" to line.text,

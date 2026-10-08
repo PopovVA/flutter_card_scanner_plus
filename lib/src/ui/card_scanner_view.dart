@@ -75,17 +75,50 @@ class CardScannerView extends StatefulWidget {
   State<CardScannerView> createState() => _CardScannerViewState();
 }
 
-class _CardScannerViewState extends State<CardScannerView> {
+class _CardScannerViewState extends State<CardScannerView>
+    with WidgetsBindingObserver {
   Size? _lastSize;
   CameraHandle? _lastCamera;
+  bool _resumeOnReturn = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     if (widget.autoStart) {
       WidgetsBinding.instance.addPostFrameCallback(
         (_) => widget.controller.start(),
       );
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// Releases the camera while the app is away and takes it back on return.
+  ///
+  /// Only from [AppLifecycleState.paused] and later: iOS also reports
+  /// `inactive` for a permission dialog or a notification banner, and
+  /// stopping the camera there would fight the very start that asked for
+  /// permission.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.resumed:
+        if (!_resumeOnReturn) return;
+        _resumeOnReturn = false;
+        widget.controller.start();
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.detached:
+        if (!widget.controller.value.isRunning) return;
+        _resumeOnReturn = state != AppLifecycleState.detached;
+        widget.controller.stop();
+      case AppLifecycleState.inactive:
+        break;
     }
   }
 
