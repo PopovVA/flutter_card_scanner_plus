@@ -163,8 +163,9 @@ CardScannerPage.show(
   context,
   requirements: const ScanRequirements(
     required: {CardField.number, CardField.expiry}, // wait for these
-    preferred: {CardField.name},                     // wait briefly, then skip
-    preferredTimeoutFrames: 12,                      // about 1.5 s
+    preferred: {CardField.name},                    // wait, then skip
+    preferredTimeout: Duration(milliseconds: 1500),
+    preferredGrace: Duration(seconds: 5),           // if one is mid-confirm
   ),
 );
 ```
@@ -175,8 +176,32 @@ CardScannerPage.show(
 | `numberOnly` | number | none | You only need the PAN. |
 | `full` | number, expiry, name | none | The name is mandatory. Waits until it is recognized. |
 | `fast` | number, expiry | none | Demos and tests. Accepts the first Luhn valid frame. |
+| `twoSided` | number, expiry | name | The name is printed on the other side. Waits 15 s for it. |
 
 The number is always required. A field that is neither required nor preferred is still filled in when it happens to be recognized, but never delays completion.
+
+`preferredTimeout` is measured from the frames themselves, not the wall clock, so a scan that sits in the background does not time out while nothing is being recognized. When the timeout runs out while a preferred field already has votes, `preferredGrace` buys it a little more time instead of throwing the half-recognized value away.
+
+### Cards with the name on the back
+
+A confirmed field is kept. Frames that recognize nothing, which is every frame while a card is being turned over, cannot take it away, and only a different number confirmed with more votes than the current one starts a new card. That is what lets number and expiry be read from one side and the name from the other:
+
+```dart
+final card = await CardScannerPage.show(
+  context,
+  requirements: ScanRequirements.twoSided,
+);
+```
+
+`CardScannerState.confirming` lists the fields that have a candidate but not yet enough agreement between frames, which is what to show as progress rather than as a result.
+
+### Your own rules
+
+`ScanSession` is the interface the controller drives. Implement it to change how frames become a result without touching the camera pipeline:
+
+```dart
+final controller = CardScannerController(session: MyOwnSession());
+```
 
 ## Scanning a photo
 

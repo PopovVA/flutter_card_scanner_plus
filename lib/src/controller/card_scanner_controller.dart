@@ -17,6 +17,7 @@ class CardScannerState {
     this.torchEnabled = false,
     this.result = CardScanResult.empty,
     this.lastFrame = FrameParseResult.empty,
+    this.confirming = const {},
     this.error,
   });
 
@@ -33,6 +34,10 @@ class CardScannerState {
   /// Raw fields from the most recent frame — useful for live highlighting.
   final FrameParseResult lastFrame;
 
+  /// Fields that have a candidate but not yet enough agreement between
+  /// frames. Shown as progress rather than as a result.
+  final Set<CardField> confirming;
+
   /// Set when the camera could not be started.
   final CardScannerException? error;
 
@@ -45,6 +50,7 @@ class CardScannerState {
     bool? torchEnabled,
     CardScanResult? result,
     FrameParseResult? lastFrame,
+    Set<CardField>? confirming,
     CardScannerException? error,
     bool clearError = false,
   }) => CardScannerState(
@@ -53,6 +59,7 @@ class CardScannerState {
     torchEnabled: torchEnabled ?? this.torchEnabled,
     result: result ?? this.result,
     lastFrame: lastFrame ?? this.lastFrame,
+    confirming: confirming ?? this.confirming,
     error: clearError ? null : (error ?? this.error),
   );
 }
@@ -65,18 +72,21 @@ class CardScannerController extends ValueNotifier<CardScannerState> {
   CardScannerController({
     this.requirements = ScanRequirements.standard,
     this.stopWhenComplete = true,
+    ScanSession? session,
     @visibleForTesting CardScannerPlatform? platform,
   }) : _platform = platform ?? CardScannerPlatform.instance,
-       _aggregator = FrameAggregator(requirements: requirements),
+       _session = session ?? FrameAggregator(requirements: requirements),
        super(CardScannerState.initial);
 
+  /// Rules the default session applies. Ignored when a [ScanSession] was
+  /// passed to the constructor, since that session carries its own.
   final ScanRequirements requirements;
 
   /// Stop the camera automatically once the result is complete.
   final bool stopWhenComplete;
 
   final CardScannerPlatform _platform;
-  final FrameAggregator _aggregator;
+  final ScanSession _session;
   final _results = StreamController<CardScanResult>.broadcast();
   StreamSubscription<RecognizedFrame>? _frames;
   StreamSubscription<CameraHandle>? _preview;
@@ -138,10 +148,11 @@ class CardScannerController extends ValueNotifier<CardScannerState> {
 
   /// Clears the accumulated result so a new card can be scanned.
   void reset() {
-    _aggregator.reset();
+    _session.reset();
     value = value.copyWith(
       result: CardScanResult.empty,
       lastFrame: FrameParseResult.empty,
+      confirming: const {},
     );
   }
 
@@ -173,9 +184,13 @@ class CardScannerController extends ValueNotifier<CardScannerState> {
     if (value.isComplete) return;
 
     final parsed = CardFrameParser.parse(frame);
-    final result = _aggregator.add(parsed);
+    final result = _session.add(parsed);
     final changed = result != value.result;
-    value = value.copyWith(result: result, lastFrame: parsed);
+    value = value.copyWith(
+      result: result,
+      lastFrame: parsed,
+      confirming: _session.confirming,
+    );
 
     if (changed) _results.add(result);
     if (result.isComplete) {

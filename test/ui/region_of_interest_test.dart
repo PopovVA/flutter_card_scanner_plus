@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_card_scanner_plus/flutter_card_scanner_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'fake_scanner_platform.dart';
+import '../fake_scanner_platform.dart';
 
 const _portrait = CameraHandle(
   textureId: 1,

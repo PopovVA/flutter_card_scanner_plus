@@ -5,6 +5,33 @@
 - `CardBrand` gained `discover`, `jcb`, `diners` and `unionpay`. A `switch`
   over the enum without a `default` clause stops compiling until the new
   values are handled.
+- `ScanRequirements.preferredTimeoutFrames` is gone. Use `preferredTimeout`,
+  which takes a `Duration`.
+
+### Completing a scan
+
+- A confirmed field is kept. Frames that recognize nothing no longer take it
+  away, which is what broke cards printed on both sides: with the card turned
+  over, the votes behind the number and the date were evicted and the result
+  went backwards.
+- A cardholder name, once confirmed, is not replaced. Background text used to
+  collect votes while the card was turned and win.
+- A different number overwrites nothing until it is confirmed in its own
+  right, with more votes than the number already held. Two cards in view no
+  longer swap the result back and forth.
+- Votes carry the number visible in the same frame, so one card's expiry date
+  and name can never be attributed to another.
+- `ScanRequirements.preferredTimeout` and `preferredGrace` are `Duration`s and
+  replace `preferredTimeoutFrames`. Time is measured from the frames
+  themselves, so a scan in the background does not time out while nothing is
+  being recognized, and a preferred field that is mid-confirmation when the
+  timeout expires is granted the grace period rather than discarded.
+- `ScanRequirements.twoSided` waits 15 seconds for a name on the other side.
+- `CardScannerState.confirming` lists the fields that have a candidate but not
+  yet enough agreement, for a UI that wants to show progress.
+- `ScanSession` is the interface the controller drives, and
+  `CardScannerController(session: ...)` takes an implementation of it. An app
+  can change the scan rules without forking the camera pipeline.
 
 ### Recognition
 

@@ -15,6 +15,10 @@ class FakeScannerPlatform implements CardScannerPlatform {
 
   void rotate(CameraHandle next) => _previews.add(next);
 
+  /// Pushes one recognized frame, as the platform would.
+  void recognize(List<TextLine> lines) =>
+      _frames.add(RecognizedFrame(lines: lines));
+
   @override
   Future<CameraHandle> start({TextBox? regionOfInterest}) async {
     started = true;
