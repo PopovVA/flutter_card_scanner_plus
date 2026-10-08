@@ -11,6 +11,25 @@
   interface, which is only needed to fake the platform in tests, has to
   provide it.
 
+### The built-in UI
+
+- The default overlay says what the scanner is still looking for rather than
+  always showing the same line: the expiry date, or the other side of the
+  card for the name. People read "number recognized" and assumed it had
+  frozen while it was waiting for the date.
+- A small spinner runs while any field is found and the scan is not finished.
+- `CardFrameOverlay.enableHaptics` plays one light tap per change of prompt,
+  so a card can be turned over without watching the screen. Off by default.
+- `CardScannerStrings` holds every string the scanner shows, with English
+  defaults, and `CardScannerPage` and `CardFrameOverlay` take one. No new
+  dependency: build it from your own localizations.
+- The error screen distinguishes a refusal from a failure and from a camera
+  held by another app, offers a retry, and offers to open the system settings
+  when the app supplies `onOpenSettings`. The close button is always
+  reachable, and opening the camera shows progress instead of a black screen.
+- Closing the page takes the preview down a frame before the route leaves, so
+  the exit animation never draws a texture that is being released.
+
 ### Camera lifecycle
 
 - `stop` completes only once the platform has finished tearing the session

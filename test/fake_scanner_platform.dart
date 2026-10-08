@@ -20,6 +20,12 @@ class FakeScannerPlatform implements CardScannerPlatform {
   /// races the teardown is reproduced.
   Completer<void>? holdStop;
 
+  /// Makes the next start fail, for the error screen.
+  CardScannerException? failStartWith;
+
+  /// Completes a start only when a test says so, for the opening state.
+  Completer<void>? holdStart;
+
   void rotate(CameraHandle next) => _previews.add(next);
 
   /// Pushes one recognized frame, as the platform would.
@@ -32,6 +38,10 @@ class FakeScannerPlatform implements CardScannerPlatform {
   @override
   Future<CameraHandle> start({TextBox? regionOfInterest}) async {
     starts++;
+    final hold = holdStart;
+    if (hold != null) await hold.future;
+    final failure = failStartWith;
+    if (failure != null) throw failure;
     if (started) {
       throw const CardScannerException(CardScannerException.alreadyRunning);
     }

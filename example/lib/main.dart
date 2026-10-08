@@ -27,11 +27,19 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   CardScanResult? _result;
 
-  Future<void> _scan({required ScanRequirements requirements}) async {
+  Future<void> _scan({
+    required ScanRequirements requirements,
+    bool enableHaptics = false,
+  }) async {
     final result = await CardScannerPage.show(
       context,
       requirements: requirements,
       title: 'Scan card',
+      enableHaptics: enableHaptics,
+      // A real app would call permission_handler's openAppSettings here.
+      onOpenSettings: () => ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Open the app settings here')),
+      ),
     );
     if (!mounted) return;
     setState(() => _result = result);
@@ -80,6 +88,15 @@ class _HomePageState extends State<HomePage> {
               onPressed: () => _scan(requirements: ScanRequirements.full),
               icon: const Icon(Icons.badge_outlined),
               label: const Text('Scan all three (wait for name)'),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () => _scan(
+                requirements: ScanRequirements.twoSided,
+                enableHaptics: true,
+              ),
+              icon: const Icon(Icons.flip_to_back_outlined),
+              label: const Text('Scan a two-sided card'),
             ),
             const SizedBox(height: 12),
             OutlinedButton.icon(

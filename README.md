@@ -203,6 +203,26 @@ final card = await CardScannerPage.show(
 final controller = CardScannerController(session: MyOwnSession());
 ```
 
+## Text, prompts and failures
+
+The built-in page tells the user what it is still looking for, shows a spinner while it works, and offers a way out when the camera will not open.
+
+```dart
+CardScannerPage.show(
+  context,
+  strings: CardScannerStrings(
+    alignCard: l10n.alignCard,
+    lookingForName: l10n.turnTheCardOver,
+    permissionDenied: l10n.cameraAccessNeeded,
+    // every string has an English default
+  ),
+  onOpenSettings: openAppSettings, // from permission_handler, if you use it
+  enableHaptics: true,             // one light tap per prompt, off by default
+);
+```
+
+`CardScannerStrings` holds every string the scanner can show, with English defaults. `onOpenSettings` is a callback rather than a dependency, so this package does not pull a permissions plugin into your app; leave it out and no such button is offered. The close button is always reachable, including on the error screen.
+
 ## Scanning a photo
 
 ```dart

@@ -19,5 +19,6 @@ export 'src/channel/card_scanner_platform.dart'
 export 'src/controller/card_scanner_controller.dart';
 export 'src/ui/card_frame_overlay.dart';
 export 'src/ui/card_scanner_page.dart';
+export 'src/ui/card_scanner_strings.dart';
 export 'src/ui/card_scanner_view.dart';
 export 'src/card_scanner.dart';
