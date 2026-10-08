@@ -36,8 +36,14 @@ class PanCandidate {
 /// A candidate must pass the Luhn check, belong to a supported [CardBrand]
 /// and have a length valid for that brand.
 abstract final class PanParser {
-  /// Lengths to try when scanning a longer digit run for an embedded PAN.
-  static const _windowLengths = [16, 15, 19];
+  /// Lengths to try when scanning a longer digit run for an embedded PAN,
+  /// longest first so a short window is not preferred over the full number.
+  /// Every extra length is another chance for OCR noise to pass Luhn, so
+  /// the list holds only lengths some supported network actually issues.
+  static const _windowLengths = [19, 18, 17, 16, 15, 14];
+
+  /// Shortest PAN any supported network issues (Diners Club).
+  static const _minLength = 14;
 
   /// Confidence penalty applied per repaired (letter → digit) character.
   static const _repairPenalty = 0.08;
@@ -109,7 +115,7 @@ abstract final class PanParser {
     double lineConfidence,
   ) {
     final digits = run.digits;
-    if (digits.length < 15) return null;
+    if (digits.length < _minLength) return null;
 
     final baseConfidence = (lineConfidence * (1 - run.repairs * _repairPenalty))
         .clamp(0.0, 1.0);

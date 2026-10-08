@@ -7,11 +7,12 @@
   <a href="https://github.com/PopovVA/flutter_card_scanner_plus/actions/workflows/ci.yml"><img src="https://github.com/PopovVA/flutter_card_scanner_plus/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/PopovVA/flutter_card_scanner_plus/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT"></a>
   <img src="https://img.shields.io/badge/platforms-iOS%20%7C%20Android-lightgrey.svg" alt="platforms">
+  <a href="https://buymeacoffee.com/LeonRedfield"><img src="https://img.shields.io/badge/Buy%20me%20a%20coffee-support-FFDD00?logo=buymeacoffee&logoColor=black" alt="Buy me a coffee"></a>
 </p>
 
 Scan a payment card with the camera and get its number, expiry date and cardholder name back as a typed result. Recognition runs fully on the device using the platform OCR engines: Vision on iOS and ML Kit on Android. There is no third party camera plugin, no cloud service and no network access.
 
-Supported networks: **Visa**, **Mastercard**, **American Express**.
+Supported networks: **Visa**, **Mastercard**, **American Express**, **Discover**, **JCB**, **Diners Club**, **UnionPay**.
 
 ## Highlights
 
@@ -163,8 +164,9 @@ CardScannerPage.show(
   context,
   requirements: const ScanRequirements(
     required: {CardField.number, CardField.expiry}, // wait for these
-    preferred: {CardField.name},                     // wait briefly, then skip
-    preferredTimeoutFrames: 12,                      // about 1.5 s
+    preferred: {CardField.name},                    // wait, then skip
+    preferredTimeout: Duration(milliseconds: 1500),
+    preferredGrace: Duration(seconds: 5),           // if one is mid-confirm
   ),
 );
 ```
@@ -175,8 +177,65 @@ CardScannerPage.show(
 | `numberOnly` | number | none | You only need the PAN. |
 | `full` | number, expiry, name | none | The name is mandatory. Waits until it is recognized. |
 | `fast` | number, expiry | none | Demos and tests. Accepts the first Luhn valid frame. |
+| `twoSided` | number, expiry | name | The name is printed on the other side. Waits 15 s for it. |
 
 The number is always required. A field that is neither required nor preferred is still filled in when it happens to be recognized, but never delays completion.
+
+`preferredTimeout` is measured from the frames themselves, not the wall clock, so a scan that sits in the background does not time out while nothing is being recognized. When the timeout runs out while a preferred field already has votes, `preferredGrace` buys it a little more time instead of throwing the half-recognized value away.
+
+### Cards with the name on the back
+
+A confirmed field is kept. Frames that recognize nothing, which is every frame while a card is being turned over, cannot take it away, and only a different number confirmed with more votes than the current one starts a new card. That is what lets number and expiry be read from one side and the name from the other:
+
+```dart
+final card = await CardScannerPage.show(
+  context,
+  requirements: ScanRequirements.twoSided,
+);
+```
+
+`CardScannerState.confirming` lists the fields that have a candidate but not yet enough agreement between frames, which is what to show as progress rather than as a result.
+
+### Your own rules
+
+`ScanSession` is the interface the controller drives. Implement it to change how frames become a result without touching the camera pipeline:
+
+```dart
+final controller = CardScannerController(session: MyOwnSession());
+```
+
+## Given and family name
+
+Cards print one line and never say where the surname starts, so a payment form that wants two fields has to guess. `CardholderName` guesses the usual way: the last word is the surname, anything before it is the given name, and a particle in front of the surname belongs to it.
+
+```dart
+final name = result.splitName;       // null when no name was recognized
+name?.given;   // MARIA
+name?.family;  // DE LA CRUZ
+```
+
+It handles middle names and initials ("WREN A. NGUYEN") and the particles da, das, de, del, della, den, der, di, do, dos, du, la, le, van and von. It will get some names wrong, so let people correct it.
+
+## Text, prompts and failures
+
+The built-in page tells the user what it is still looking for, shows a spinner while it works, and offers a way out when the camera will not open.
+
+```dart
+CardScannerPage.show(
+  context,
+  strings: CardScannerStrings(
+    alignCard: l10n.alignCard,
+    lookingForName: l10n.turnTheCardOver,
+    permissionDenied: l10n.cameraAccessNeeded,
+    // every string has an English default
+  ),
+  onOpenSettings: openAppSettings, // from permission_handler, if you use it
+  enableHaptics: true,             // one light tap per prompt, off by default
+);
+```
+
+`CardScannerStrings` holds every string the scanner can show, with English defaults. `onOpenSettings` is a callback rather than a dependency, so this package does not pull a permissions plugin into your app; leave it out and no such button is offered. The close button is always reachable, including on the error screen.
+
 
 ## NFC (optional)
 
@@ -338,10 +397,11 @@ Everything in step 4 and 5 is plain Dart with no platform dependencies, and it i
 
 ## Limitations
 
+- Landscape works, but a card is easiest to frame with the phone upright, so the default frame is sized for portrait.
+- The preview follows the orientation of your UI, not of the handset. An app locked to portrait keeps an upright guide and an upright preview whichever way the phone is held.
 - The CVV / CVC is never read, by design. It is the proof that the cardholder is entering it knowingly, and capturing it from the camera would put every app using this package deeper into PCI DSS scope. Ask for it in a text field after the scan.
-- Visa, Mastercard and American Express only. Other networks are rejected even when the number is Luhn valid.
+- Only the networks listed above. Anything else is rejected even when the number is Luhn valid, and so are the few UnionPay ranges issued outside the Luhn checksum.
 - Cardholder name detection is heuristic. Embossed names on busy backgrounds, names with non Latin characters, and cards without a printed name will come back as `null`.
-- Portrait orientation only.
 
 ## Example
 
@@ -362,6 +422,11 @@ Run the checks locally before opening a PR:
 flutter analyze
 flutter test
 ```
+
+## Support
+
+This package is free and maintained in my own time. If it saved you some,
+[buy me a coffee](https://buymeacoffee.com/LeonRedfield).
 
 ## License
 

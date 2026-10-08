@@ -15,6 +15,9 @@ import UIKit
 ///   close(message?: String, errorMessage?: String)
 /// Event channel: `flutter_card_scanner_plus/frames`
 ///   {lines: [{text, box: {left, top, width, height}, confidence}]}
+///   {preview: {textureId, previewWidth, previewHeight, rotation}} after a
+///   device rotation changes the shape of the preview
+///   {error: {code, message}} when the camera fails after it started
 ///
 /// All boxes are normalized (0..1) in portrait preview coordinates with a
 /// top-left origin, regardless of the region of interest.
@@ -23,6 +26,9 @@ public class FlutterCardScannerPlusPlugin: NSObject, FlutterPlugin, FlutterStrea
   private var session: CameraSession?
   private var eventSink: FlutterEventSink?
   private var nfc: AnyObject?
+
+  /// Bumped by every stop, so a start still in flight knows it lost.
+  private var generation = 0
 
   init(textures: FlutterTextureRegistry) {
     self.textures = textures
@@ -93,9 +99,9 @@ public class FlutterCardScannerPlusPlugin: NSObject, FlutterPlugin, FlutterStrea
     switch call.method {
     case "start":
       start(arguments: call.arguments as? [String: Any], result: result)
+    // Answered only once teardown is done, so a reopen cannot race it.
     case "stop":
-      stop()
-      result(nil)
+      stop { result(nil) }
     case "setTorch":
       let enabled = (call.arguments as? [String: Any])?["enabled"] as? Bool ?? false
       session?.setTorch(enabled)
@@ -130,9 +136,18 @@ public class FlutterCardScannerPlusPlugin: NSObject, FlutterPlugin, FlutterStrea
       return
     }
     let roi = Self.parseBox(arguments?["regionOfInterest"] as? [String: Any])
+    generation += 1
+    let token = generation
 
     Self.requestCameraAccess { [weak self] granted in
       guard let self else { return }
+      guard token == self.generation else {
+        result(
+          FlutterError(
+            code: "cancelled", message: "The scanner was stopped before it started",
+            details: nil))
+        return
+      }
       guard granted else {
         result(FlutterError(code: "permissionDenied", message: "Camera permission denied", details: nil))
         return
@@ -140,6 +155,22 @@ public class FlutterCardScannerPlusPlugin: NSObject, FlutterPlugin, FlutterStrea
       do {
         let session = try CameraSession(textures: self.textures) { [weak self] frame in
           self?.eventSink?(frame)
+        }
+        // A rotation changes the shape of the preview, so Dart is told to
+        // re-read it rather than keeping the size it got at start.
+        session.onPreviewChanged = { [weak self] in
+          guard let self, let session = self.session else { return }
+          self.eventSink?([
+            "preview": [
+              "textureId": session.textureId,
+              "previewWidth": session.previewSize.width,
+              "previewHeight": session.previewSize.height,
+              "rotation": 0,
+            ]
+          ])
+        }
+        session.onError = { [weak self] code, message in
+          self?.eventSink?(["error": ["code": code, "message": message]])
         }
         session.regionOfInterest = roi
         self.session = session
@@ -157,9 +188,15 @@ public class FlutterCardScannerPlusPlugin: NSObject, FlutterPlugin, FlutterStrea
     }
   }
 
-  private func stop() {
-    session?.stop()
+  private func stop(_ completion: @escaping () -> Void = {}) {
+    generation += 1
+    let current = session
     session = nil
+    guard let current else {
+      completion()
+      return
+    }
+    current.stop(completion: completion)
   }
 
   // MARK: - FlutterStreamHandler

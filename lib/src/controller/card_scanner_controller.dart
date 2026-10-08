@@ -17,6 +17,7 @@ class CardScannerState {
     this.torchEnabled = false,
     this.result = CardScanResult.empty,
     this.lastFrame = FrameParseResult.empty,
+    this.confirming = const {},
     this.error,
   });
 
@@ -33,6 +34,10 @@ class CardScannerState {
   /// Raw fields from the most recent frame — useful for live highlighting.
   final FrameParseResult lastFrame;
 
+  /// Fields that have a candidate but not yet enough agreement between
+  /// frames. Shown as progress rather than as a result.
+  final Set<CardField> confirming;
+
   /// Set when the camera could not be started.
   final CardScannerException? error;
 
@@ -45,6 +50,7 @@ class CardScannerState {
     bool? torchEnabled,
     CardScanResult? result,
     FrameParseResult? lastFrame,
+    Set<CardField>? confirming,
     CardScannerException? error,
     bool clearError = false,
   }) => CardScannerState(
@@ -53,6 +59,7 @@ class CardScannerState {
     torchEnabled: torchEnabled ?? this.torchEnabled,
     result: result ?? this.result,
     lastFrame: lastFrame ?? this.lastFrame,
+    confirming: confirming ?? this.confirming,
     error: clearError ? null : (error ?? this.error),
   );
 }
@@ -65,29 +72,52 @@ class CardScannerController extends ValueNotifier<CardScannerState> {
   CardScannerController({
     this.requirements = ScanRequirements.standard,
     this.stopWhenComplete = true,
+    ScanSession? session,
     @visibleForTesting CardScannerPlatform? platform,
   }) : _platform = platform ?? CardScannerPlatform.instance,
-       _aggregator = FrameAggregator(requirements: requirements),
+       _session = session ?? FrameAggregator(requirements: requirements),
        super(CardScannerState.initial);
 
+  /// Rules the default session applies. Ignored when a [ScanSession] was
+  /// passed to the constructor, since that session carries its own.
   final ScanRequirements requirements;
 
   /// Stop the camera automatically once the result is complete.
   final bool stopWhenComplete;
 
   final CardScannerPlatform _platform;
-  final FrameAggregator _aggregator;
+  final ScanSession _session;
   final _results = StreamController<CardScanResult>.broadcast();
   StreamSubscription<RecognizedFrame>? _frames;
+  StreamSubscription<CameraHandle>? _preview;
+  StreamSubscription<CardScannerException>? _errors;
+
+  /// Start and stop run one after another on this controller, so a reopen
+  /// cannot overlap the teardown of the session before it.
+  Future<void> _chain = Future<void>.value();
   Completer<CardScanResult>? _once;
   TextBox? _regionOfInterest;
+  DateTime? _reshapedAt;
   bool _disposed = false;
+
+  /// How long frames are dropped after a rotation if the new region of
+  /// interest is never acknowledged. Without a ceiling a controller driven
+  /// without a view, which is what sets the region, would stall for good.
+  static const _settleTimeout = Duration(milliseconds: 400);
 
   /// Emits every time the aggregated result changes.
   Stream<CardScanResult> get results => _results.stream;
 
+  Future<T> _queue<T>(Future<T> Function() action) {
+    final result = _chain.then((_) => action());
+    _chain = result.then((_) {}, onError: (_) {});
+    return result;
+  }
+
   /// Starts the camera. Safe to call when already running.
-  Future<void> start() async {
+  Future<void> start() => _queue(_start);
+
+  Future<void> _start() async {
     if (value.isRunning || _disposed) return;
     value = value.copyWith(clearError: true);
     try {
@@ -104,8 +134,26 @@ class CardScannerController extends ValueNotifier<CardScannerState> {
           );
         },
       );
+      // A device rotation reshapes the preview; the view watches this to
+      // redraw the texture and move the region of interest with it.
+      _preview = _platform.previewUpdates.listen((handle) {
+        if (!value.isRunning) return;
+        _reshapedAt = DateTime.now();
+        value = value.copyWith(camera: handle);
+      });
+      // A camera that fails once it is running: taken by another app, out
+      // of resources, or its Activity gone.
+      _errors = _platform.errors.listen((e) {
+        if (e.code == CardScannerException.cancelled) return;
+        if (value.isRunning) unawaited(stop());
+        value = value.copyWith(error: e);
+        _once?.completeError(e);
+        _once = null;
+      });
       value = value.copyWith(camera: camera, isRunning: true);
     } on CardScannerException catch (e) {
+      // A start the app itself cancelled by stopping is not a failure.
+      if (e.code == CardScannerException.cancelled) return;
       value = value.copyWith(error: e);
       _once?.completeError(e);
       _once = null;
@@ -113,11 +161,27 @@ class CardScannerController extends ValueNotifier<CardScannerState> {
   }
 
   /// Stops the camera and releases the texture. Keeps the current result.
-  Future<void> stop() async {
+  ///
+  /// Completes once the platform has finished tearing the session down, so
+  /// the next [start] gets a camera that is actually free.
+  Future<void> stop() => _queue(_stop);
+
+  Future<void> _stop() async {
     if (!value.isRunning) return;
-    await _frames?.cancel();
+    // Cancelling detaches the listeners straight away; waiting for the
+    // cancellations to settle would only delay the teardown this call is
+    // meant to report.
+    unawaited(_frames?.cancel());
     _frames = null;
+    unawaited(_preview?.cancel());
+    _preview = null;
+    unawaited(_errors?.cancel());
+    _errors = null;
     await _platform.stop();
+    _reshapedAt = null;
+    // dispose() stops the camera too, and the platform call above gives the
+    // notifier time to be torn down before this returns.
+    if (_disposed) return;
     value = value.copyWith(
       isRunning: false,
       torchEnabled: false,
@@ -127,10 +191,11 @@ class CardScannerController extends ValueNotifier<CardScannerState> {
 
   /// Clears the accumulated result so a new card can be scanned.
   void reset() {
-    _aggregator.reset();
+    _session.reset();
     value = value.copyWith(
       result: CardScanResult.empty,
       lastFrame: FrameParseResult.empty,
+      confirming: const {},
     );
   }
 
@@ -146,7 +211,10 @@ class CardScannerController extends ValueNotifier<CardScannerState> {
   /// this automatically to match the card frame.
   Future<void> setRegionOfInterest(TextBox box) async {
     _regionOfInterest = box;
-    if (value.isRunning) await _platform.setRegionOfInterest(box);
+    if (!value.isRunning) return;
+    await _platform.setRegionOfInterest(box);
+    // The region now matches the preview again, so frames can be trusted.
+    _reshapedAt = null;
   }
 
   /// Starts scanning (if needed) and completes with the first complete
@@ -161,10 +229,24 @@ class CardScannerController extends ValueNotifier<CardScannerState> {
   void _onFrame(RecognizedFrame frame) {
     if (value.isComplete) return;
 
+    // A frame recognized before a rotation reached the camera describes the
+    // previous geometry: its boxes are in the old orientation and were
+    // filtered by the old region of interest. Scoring it would move a field
+    // relative to the number and could confirm text from off the card.
+    final reshaped = _reshapedAt;
+    if (reshaped != null) {
+      if (DateTime.now().difference(reshaped) < _settleTimeout) return;
+      _reshapedAt = null;
+    }
+
     final parsed = CardFrameParser.parse(frame);
-    final result = _aggregator.add(parsed);
+    final result = _session.add(parsed);
     final changed = result != value.result;
-    value = value.copyWith(result: result, lastFrame: parsed);
+    value = value.copyWith(
+      result: result,
+      lastFrame: parsed,
+      confirming: _session.confirming,
+    );
 
     if (changed) _results.add(result);
     if (result.isComplete) {

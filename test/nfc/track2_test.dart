@@ -49,8 +49,14 @@ void main() {
     });
 
     test('rejects an unsupported network', () {
-      // Discover, Luhn valid but out of scope for this package.
-      expect(Track2Parser.parse('6011111111111117D2812201'), isNull);
+      // Maestro: Luhn valid but out of scope for this package.
+      expect(Track2Parser.parse('5018000000000009D2812201'), isNull);
+    });
+
+    test('reads a network added in 0.2.0', () {
+      final data = Track2Parser.parse('6011111111111117D2812201');
+      expect(data?.pan, '6011111111111117');
+      expect(data?.brand, CardBrand.discover);
     });
 
     test('rejects a malformed month', () {
