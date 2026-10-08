@@ -10,8 +10,15 @@ class FakeScannerPlatform implements CardScannerPlatform {
   final CameraHandle handle;
   final _frames = StreamController<RecognizedFrame>.broadcast();
   final _previews = StreamController<CameraHandle>.broadcast();
+  final _errors = StreamController<CardScannerException>.broadcast();
   final regions = <TextBox>[];
   bool started = false;
+  int starts = 0;
+  int stops = 0;
+
+  /// Completes a stop only when a test says so, which is how a reopen that
+  /// races the teardown is reproduced.
+  Completer<void>? holdStop;
 
   void rotate(CameraHandle next) => _previews.add(next);
 
@@ -19,14 +26,26 @@ class FakeScannerPlatform implements CardScannerPlatform {
   void recognize(List<TextLine> lines) =>
       _frames.add(RecognizedFrame(lines: lines));
 
+  /// Reports a camera that failed after it started.
+  void fail(CardScannerException error) => _errors.add(error);
+
   @override
   Future<CameraHandle> start({TextBox? regionOfInterest}) async {
+    starts++;
+    if (started) {
+      throw const CardScannerException(CardScannerException.alreadyRunning);
+    }
     started = true;
     return handle;
   }
 
   @override
-  Future<void> stop() async => started = false;
+  Future<void> stop() async {
+    stops++;
+    final hold = holdStop;
+    if (hold != null) await hold.future;
+    started = false;
+  }
 
   @override
   Future<void> setTorch(bool enabled) async {}
@@ -39,6 +58,9 @@ class FakeScannerPlatform implements CardScannerPlatform {
 
   @override
   Stream<CameraHandle> get previewUpdates => _previews.stream;
+
+  @override
+  Stream<CardScannerException> get errors => _errors.stream;
 
   @override
   Future<RecognizedFrame> recognizeImage(

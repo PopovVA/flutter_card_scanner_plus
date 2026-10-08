@@ -11,6 +11,7 @@ import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
+import androidx.camera.core.UseCase
 import androidx.camera.core.resolutionselector.AspectRatioStrategy
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
@@ -43,6 +44,9 @@ class CameraSession(
     /** Called when a device rotation changes the shape of the preview. */
     var onPreviewChanged: ((PreviewInfo) -> Unit)? = null
 
+    /** Called when the camera fails after it started. */
+    var onError: ((String, String) -> Unit)? = null
+
     private val registry = LifecycleRegistry(this)
     override val lifecycle: Lifecycle get() = registry
 
@@ -54,6 +58,7 @@ class CameraSession(
     private var provider: ProcessCameraProvider? = null
     private var camera: Camera? = null
     private var preview: Preview? = null
+    private var analysis: ImageAnalysis? = null
     private var onReady: ((PreviewInfo) -> Unit)? = null
     private var lastInfo: PreviewInfo? = null
     private var orientationListener: OrientationEventListener? = null
@@ -90,6 +95,7 @@ class CameraSession(
             .setResolutionSelector(resolution)
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
             .build()
+        this.analysis = analysis
         analysis.setAnalyzer(analysisExecutor) { proxy ->
             val now = System.currentTimeMillis()
             if (busy.get() || now - lastRun < MIN_INTERVAL_MS) {
@@ -105,8 +111,14 @@ class CameraSession(
         }
 
         registry.currentState = Lifecycle.State.STARTED
-        provider.unbindAll()
-        camera = provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
+        // Bind to this session's own lifecycle and nothing else: the provider
+        // is process wide, and unbinding everything on it would tear down a
+        // session that another part of the app is still using.
+        val camera = provider.bindToLifecycle(
+            this, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis,
+        )
+        this.camera = camera
+        observeState(camera)
         startOrientationUpdates(preview, analysis)
 
         // Surface can be dropped while backgrounded (Impeller); re-request on return.
@@ -181,17 +193,45 @@ class CameraSession(
         camera?.cameraControl?.enableTorch(enabled)
     }
 
-    fun stop() {
+    /**
+     * Releases everything and then calls [onDone], on the main thread.
+     *
+     * The callback is what lets the Dart side await a stop: starting a new
+     * session while the previous teardown was still queued was leaving the
+     * preview black on reopen.
+     */
+    fun stop(onDone: () -> Unit) {
         orientationListener?.disable()
         orientationListener = null
-        mainHandler.post {
+        onPreviewChanged = null
+        onError = null
+
+        val teardown = Runnable {
             registry.currentState = Lifecycle.State.DESTROYED
-            provider?.unbindAll()
+            val cases = listOfNotNull<UseCase>(preview, analysis)
+            if (cases.isNotEmpty()) provider?.unbind(*cases.toTypedArray())
             provider = null
             camera = null
             preview = null
+            analysis = null
             producer.release()
             analysisExecutor.shutdown()
+            onDone()
+        }
+
+        if (Looper.myLooper() == Looper.getMainLooper()) teardown.run()
+        else mainHandler.post(teardown)
+    }
+
+    /**
+     * Reports a camera that fails after it started: another app took it, the
+     * device ran out of resources, or it was disabled by policy. Without this
+     * the preview simply froze.
+     */
+    private fun observeState(camera: Camera) {
+        camera.cameraInfo.cameraState.observe(this) { state ->
+            val error = state.error ?: return@observe
+            onError?.invoke("cameraError", "CameraX reported error ${error.code}")
         }
     }
 

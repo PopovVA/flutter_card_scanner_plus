@@ -26,6 +26,7 @@ import io.flutter.view.TextureRegistry
  *   {lines: [{text, box: {left, top, width, height}, confidence}]}
  *   {preview: {textureId, previewWidth, previewHeight, rotation}} after a
  *   device rotation changes the shape of the preview
+ *   {error: {code, message}} when the camera fails after it started
  *
  * All boxes are normalized (0..1) in upright (portrait) preview coordinates
  * with a top-left origin. `rotation` is the clockwise rotation, in degrees,
@@ -47,6 +48,9 @@ class FlutterCardScannerPlusPlugin :
     private var eventSink: EventChannel.EventSink? = null
     private var pendingStart: (() -> Unit)? = null
     private var pendingStartResult: MethodChannel.Result? = null
+
+    /** Bumped by every stop, so a start still in flight knows it lost. */
+    private var generation = 0
     private val mainHandler = Handler(Looper.getMainLooper())
 
     private val activity: Activity? get() = activityBinding?.activity
@@ -78,7 +82,14 @@ class FlutterCardScannerPlusPlugin :
         onAttachedToActivity(binding)
 
     override fun onDetachedFromActivity() {
+        val wasRunning = session != null
         stop()
+        // The Activity is going away and with it the camera. Telling Dart
+        // keeps its idea of the state honest; otherwise the controller still
+        // believes it is running and the preview stays black.
+        if (wasRunning) {
+            emitError("cameraDetached", "The scanner was detached from the Activity")
+        }
         activityBinding?.removeRequestPermissionsResultListener(this)
         activityBinding = null
     }
@@ -88,10 +99,8 @@ class FlutterCardScannerPlusPlugin :
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "start" -> start(call.argument<Map<String, Any>>("regionOfInterest"), result)
-            "stop" -> {
-                stop()
-                result.success(null)
-            }
+            // Answered only once teardown is done, so a reopen cannot race it.
+            "stop" -> stop { result.success(null) }
             "setTorch" -> {
                 session?.setTorch(call.argument<Boolean>("enabled") ?: false)
                 result.success(null)
@@ -130,6 +139,7 @@ class FlutterCardScannerPlusPlugin :
         }
         val roi = parseBox(roiArg)
 
+        val token = ++generation
         val launch = {
             try {
                 val s = CameraSession(activity, textures) { frame -> eventSink?.success(frame) }
@@ -147,9 +157,14 @@ class FlutterCardScannerPlusPlugin :
                         )
                     )
                 }
+                s.onError = { code, message -> emitError(code, message) }
                 s.regionOfInterest = roi
                 session = s
                 s.start { info ->
+                    if (token != generation) {
+                        result.error("cancelled", "The scanner was stopped before it started", null)
+                        return@start
+                    }
                     result.success(
                         mapOf(
                             "textureId" to info.textureId,
@@ -174,9 +189,19 @@ class FlutterCardScannerPlusPlugin :
         }
     }
 
-    private fun stop() {
-        session?.stop()
+    private fun stop(onDone: () -> Unit = {}) {
+        generation++
+        val current = session
         session = null
+        if (current == null) {
+            onDone()
+            return
+        }
+        current.stop(onDone)
+    }
+
+    private fun emitError(code: String, message: String) {
+        eventSink?.success(mapOf("error" to mapOf("code" to code, "message" to message)))
     }
 
     override fun onRequestPermissionsResult(

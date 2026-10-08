@@ -10,7 +10,8 @@ import '../core/recognized_text.dart';
 class CardScannerException implements Exception {
   const CardScannerException(this.code, [this.message]);
 
-  /// One of [permissionDenied], [noCamera], [cameraError], [alreadyRunning]
+  /// One of [permissionDenied], [noCamera], [cameraError],
+  /// [alreadyRunning], [cameraInterrupted], [cameraDetached], [cancelled]
   /// or a platform-specific code.
   final String code;
   final String? message;
@@ -19,6 +20,16 @@ class CardScannerException implements Exception {
   static const noCamera = 'noCamera';
   static const cameraError = 'cameraError';
   static const alreadyRunning = 'alreadyRunning';
+
+  /// Another app holds the camera.
+  static const cameraInterrupted = 'cameraInterrupted';
+
+  /// The host Activity went away, taking the camera with it (Android).
+  static const cameraDetached = 'cameraDetached';
+
+  /// A start that was stopped before it finished opening. Not a failure:
+  /// the controller swallows it.
+  static const cancelled = 'cancelled';
 
   bool get isPermissionDenied => code == permissionDenied;
 
@@ -99,6 +110,11 @@ abstract class CardScannerPlatform {
   /// preview, so the texture and the region of interest can follow.
   Stream<CameraHandle> get previewUpdates;
 
+  /// Emits when the camera fails after it started: another app took it, the
+  /// device ran out of resources, or the host Activity went away. The camera
+  /// is no longer running once one of these arrives.
+  Stream<CardScannerException> get errors;
+
   /// Runs OCR once on an encoded image (JPEG, PNG, HEIC…).
   ///
   /// Independent of the camera; may be called while it is running or not.
@@ -176,7 +192,8 @@ class MethodChannelCardScannerPlatform implements CardScannerPlatform {
   }
 
   /// One broadcast of the native channel, split by the key each event
-  /// carries: `lines` for OCR output, `preview` for a rotation.
+  /// carries: `lines` for OCR output, `preview` for a rotation, `error` for
+  /// a camera that stopped working.
   Stream<Map<Object?, Object?>> get _stream =>
       _raw ??= _events.receiveBroadcastStream().cast<Map<Object?, Object?>>();
 
@@ -192,4 +209,14 @@ class MethodChannelCardScannerPlatform implements CardScannerPlatform {
         (event) =>
             CameraHandle.fromMap(event['preview']! as Map<Object?, Object?>),
       );
+
+  @override
+  Stream<CardScannerException> get errors =>
+      _stream.where((event) => event['error'] is Map).map((event) {
+        final error = event['error']! as Map<Object?, Object?>;
+        return CardScannerException(
+          error['code'] as String? ?? CardScannerException.cameraError,
+          error['message'] as String?,
+        );
+      });
 }

@@ -7,6 +7,35 @@
   values are handled.
 - `ScanRequirements.preferredTimeoutFrames` is gone. Use `preferredTimeout`,
   which takes a `Duration`.
+- `CardScannerPlatform` gained an `errors` stream. Anything implementing that
+  interface, which is only needed to fake the platform in tests, has to
+  provide it.
+
+### Camera lifecycle
+
+- `stop` completes only once the platform has finished tearing the session
+  down. It used to be fire and forget: Android posted the teardown to the
+  main handler and dropped its reference immediately, iOS stopped on its own
+  queue, and a quick reopen could start a new session on top of a pending
+  one. That is the "unable to start camera" black preview.
+- Android unbinds only its own use cases. `unbindAll` on the process wide
+  `ProcessCameraProvider` was reaching into any other session bound to it.
+- Start and stop run one after another on a controller, so a reopen waits for
+  the teardown before it rather than racing it. A start the app cancelled by
+  stopping reports `cancelled`, which is not surfaced as an error.
+- `CardScannerView` releases the camera when the app is backgrounded and
+  takes it back on return. It deliberately ignores `inactive`, which iOS also
+  reports for a permission dialog.
+- A camera that fails after it started now reaches Dart instead of freezing
+  the preview: an `AVCaptureSession` runtime error, an interruption by
+  another app, a CameraX camera state error, or the Android Activity going
+  away during a configuration change. `value.error` is set and `isRunning`
+  becomes false. New codes: `cameraInterrupted`, `cameraDetached`,
+  `cancelled`.
+- Android keeps a recognized line only when at least 70% of it lies inside
+  the guide. The test was on the line's centre, so a line half outside
+  counted, which is how a keyboard beside the card offered its labels as a
+  cardholder name. iOS already restricted recognition to the guide.
 
 ### Orientation
 

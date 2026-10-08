@@ -90,6 +90,11 @@ class CardScannerController extends ValueNotifier<CardScannerState> {
   final _results = StreamController<CardScanResult>.broadcast();
   StreamSubscription<RecognizedFrame>? _frames;
   StreamSubscription<CameraHandle>? _preview;
+  StreamSubscription<CardScannerException>? _errors;
+
+  /// Start and stop run one after another on this controller, so a reopen
+  /// cannot overlap the teardown of the session before it.
+  Future<void> _chain = Future<void>.value();
   Completer<CardScanResult>? _once;
   TextBox? _regionOfInterest;
   DateTime? _reshapedAt;
@@ -103,8 +108,16 @@ class CardScannerController extends ValueNotifier<CardScannerState> {
   /// Emits every time the aggregated result changes.
   Stream<CardScanResult> get results => _results.stream;
 
+  Future<T> _queue<T>(Future<T> Function() action) {
+    final result = _chain.then((_) => action());
+    _chain = result.then((_) {}, onError: (_) {});
+    return result;
+  }
+
   /// Starts the camera. Safe to call when already running.
-  Future<void> start() async {
+  Future<void> start() => _queue(_start);
+
+  Future<void> _start() async {
     if (value.isRunning || _disposed) return;
     value = value.copyWith(clearError: true);
     try {
@@ -128,8 +141,19 @@ class CardScannerController extends ValueNotifier<CardScannerState> {
         _reshapedAt = DateTime.now();
         value = value.copyWith(camera: handle);
       });
+      // A camera that fails once it is running: taken by another app, out
+      // of resources, or its Activity gone.
+      _errors = _platform.errors.listen((e) {
+        if (e.code == CardScannerException.cancelled) return;
+        if (value.isRunning) unawaited(stop());
+        value = value.copyWith(error: e);
+        _once?.completeError(e);
+        _once = null;
+      });
       value = value.copyWith(camera: camera, isRunning: true);
     } on CardScannerException catch (e) {
+      // A start the app itself cancelled by stopping is not a failure.
+      if (e.code == CardScannerException.cancelled) return;
       value = value.copyWith(error: e);
       _once?.completeError(e);
       _once = null;
@@ -137,12 +161,22 @@ class CardScannerController extends ValueNotifier<CardScannerState> {
   }
 
   /// Stops the camera and releases the texture. Keeps the current result.
-  Future<void> stop() async {
+  ///
+  /// Completes once the platform has finished tearing the session down, so
+  /// the next [start] gets a camera that is actually free.
+  Future<void> stop() => _queue(_stop);
+
+  Future<void> _stop() async {
     if (!value.isRunning) return;
-    await _frames?.cancel();
+    // Cancelling detaches the listeners straight away; waiting for the
+    // cancellations to settle would only delay the teardown this call is
+    // meant to report.
+    unawaited(_frames?.cancel());
     _frames = null;
-    await _preview?.cancel();
+    unawaited(_preview?.cancel());
     _preview = null;
+    unawaited(_errors?.cancel());
+    _errors = null;
     await _platform.stop();
     _reshapedAt = null;
     // dispose() stops the camera too, and the platform call above gives the
