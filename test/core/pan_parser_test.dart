@@ -76,7 +76,21 @@ void main() {
     });
 
     test('rejects unsupported brand even when luhn-valid', () {
-      expect(PanParser.parse('6011 1111 1111 1117'), isNull);
+      // Maestro and Verve: luhn-valid, no network the scanner knows.
+      expect(PanParser.parse('5018 0000 0000 0009'), isNull);
+      expect(PanParser.parse('5061 0000 0000 0005'), isNull);
+    });
+
+    test('reads the networks added in 0.2.0', () {
+      expect(PanParser.parse('6011 1111 1111 1117')?.brand, CardBrand.discover);
+      expect(PanParser.parse('3530 1113 3330 0000')?.brand, CardBrand.jcb);
+      expect(PanParser.parse('3056 930902 5904')?.brand, CardBrand.diners);
+      expect(PanParser.parse('6200 0000 0000 0005')?.brand, CardBrand.unionpay);
+    });
+
+    test('a 14 digit diners number survives the minimum length check', () {
+      final pan = PanParser.parse('3056 930902 5904');
+      expect(pan?.number, '30569309025904');
     });
 
     test('rejects wrong length for brand', () {

@@ -31,9 +31,11 @@ class CardScannerView extends StatefulWidget {
     this.frameWidthFraction = 0.88,
     this.frameHeightFraction = 0.6,
     this.frameAlignment = const Alignment(0, -0.2),
+    this.frameRegionPadding = 0,
     this.backgroundColor = Colors.black,
   }) : assert(frameWidthFraction > 0 && frameWidthFraction <= 1),
-       assert(frameHeightFraction > 0 && frameHeightFraction <= 1);
+       assert(frameHeightFraction > 0 && frameHeightFraction <= 1),
+       assert(frameRegionPadding >= 0);
 
   /// ID-1 card: 85.60 × 53.98 mm.
   static const double iso7810AspectRatio = 85.60 / 53.98;
@@ -41,7 +43,8 @@ class CardScannerView extends StatefulWidget {
   final CardScannerController controller;
   final CardScannerOverlayBuilder? overlayBuilder;
 
-  /// Call [CardScannerController.start] when first laid out.
+  /// Call [CardScannerController.start] when first laid out, and again if
+  /// [controller] is later replaced.
   final bool autoStart;
 
   final double cardAspectRatio;
@@ -56,6 +59,14 @@ class CardScannerView extends StatefulWidget {
 
   /// Where the frame sits within the view.
   final Alignment frameAlignment;
+
+  /// Margin added around the frame before OCR runs, as a fraction of the
+  /// frame height.
+  ///
+  /// Zero, the default, reads exactly what the user sees inside the frame.
+  /// A larger value also reads the surroundings, which is how text near the
+  /// card, a keyboard for instance, ends up supplying a cardholder name.
+  final double frameRegionPadding;
 
   /// Shown before the first camera frame arrives.
   final Color backgroundColor;
@@ -72,6 +83,29 @@ class _CardScannerViewState extends State<CardScannerView> {
   void initState() {
     super.initState();
     if (widget.autoStart) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => widget.controller.start(),
+      );
+    }
+  }
+
+  @override
+  void didUpdateWidget(CardScannerView old) {
+    super.didUpdateWidget(old);
+    // The cached region is only valid for the frame and the camera it was
+    // computed from. Anything that reshapes either one invalidates it.
+    if (old.controller != widget.controller ||
+        old.cardAspectRatio != widget.cardAspectRatio ||
+        old.frameWidthFraction != widget.frameWidthFraction ||
+        old.frameHeightFraction != widget.frameHeightFraction ||
+        old.frameAlignment != widget.frameAlignment ||
+        old.frameRegionPadding != widget.frameRegionPadding) {
+      _lastSize = null;
+      _lastCamera = null;
+    }
+    // A swapped controller has no camera yet, and nothing else would open
+    // one, so the preview would stay black.
+    if (old.controller != widget.controller && widget.autoStart) {
       WidgetsBinding.instance.addPostFrameCallback(
         (_) => widget.controller.start(),
       );
@@ -121,15 +155,23 @@ class _CardScannerViewState extends State<CardScannerView> {
       size,
       Size(camera.previewWidth.toDouble(), camera.previewHeight.toDouble()),
     );
-    // Pad the frame a little: users rarely align the card perfectly.
-    final card = _cardRect(size).inflate(_cardRect(size).height * 0.15);
-    final roi = TextBox(
-      left: ((card.left - preview.left) / preview.width).clamp(0.0, 1.0),
-      top: ((card.top - preview.top) / preview.height).clamp(0.0, 1.0),
-      width: (card.width / preview.width).clamp(0.0, 1.0),
-      height: (card.height / preview.height).clamp(0.0, 1.0),
+    final frame = _cardRect(size);
+    final card = widget.frameRegionPadding == 0
+        ? frame
+        : frame.inflate(frame.height * widget.frameRegionPadding);
+
+    // Into the preview's own coordinates, then clipped to it: the preview
+    // is drawn with BoxFit.cover, so it usually runs past the view.
+    final left = ((card.left - preview.left) / preview.width).clamp(0.0, 1.0);
+    final top = ((card.top - preview.top) / preview.height).clamp(0.0, 1.0);
+    final right = ((card.right - preview.left) / preview.width).clamp(0.0, 1.0);
+    final bottom = ((card.bottom - preview.top) / preview.height).clamp(
+      0.0,
+      1.0,
     );
-    widget.controller.setRegionOfInterest(roi);
+    widget.controller.setRegionOfInterest(
+      TextBox(left: left, top: top, width: right - left, height: bottom - top),
+    );
   }
 
   @override

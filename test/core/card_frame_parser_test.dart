@@ -106,7 +106,19 @@ void main() {
       expect(CardFrameParser.parse(RecognizedFrame.empty).isEmpty, isTrue);
     });
 
-    test('name detection ignores lines above the number', () {
+    test('a line high above the number loses to one below it', () {
+      final frame = RecognizedFrame(
+        lines: [
+          line('ZEBRA MONEY', 0.05, 0.05),
+          line('4111 1111 1111 1111', 0.05, 0.45, w: 0.8, h: 0.1),
+          line('ADA LOVELACE', 0.05, 0.70),
+        ],
+      );
+      final r = CardFrameParser.parse(frame, now: now);
+      expect(r.name?.name, 'ADA LOVELACE');
+    });
+
+    test('the only candidate is still returned, however it scores', () {
       final frame = RecognizedFrame(
         lines: [
           line('ZEBRA MONEY', 0.05, 0.05),
@@ -114,9 +126,7 @@ void main() {
         ],
       );
       final r = CardFrameParser.parse(frame, now: now);
-      // Only candidate is above the PAN — still returned, but negatively scored.
       expect(r.name?.name, 'ZEBRA MONEY');
-      expect(r.name!.score, lessThan(0));
     });
   });
 }
