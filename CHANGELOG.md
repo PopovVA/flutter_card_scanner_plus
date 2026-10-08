@@ -8,6 +8,14 @@
 - `ScanRequirements.preferredTimeoutFrames` is gone. Use `preferredTimeout`,
   which takes a `Duration`.
 
+### Orientation
+
+- A frame recognized before a rotation reached the camera is dropped instead
+  of scored. Its boxes are in the previous orientation and were filtered by
+  the previous region of interest, so it could move a field relative to the
+  number or confirm text from off the card. Frames resume as soon as the new
+  region is applied, or after 400 ms if nothing applies one.
+
 ### Completing a scan
 
 - A confirmed field is kept. Frames that recognize nothing no longer take it

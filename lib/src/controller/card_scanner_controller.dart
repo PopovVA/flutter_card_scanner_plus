@@ -92,7 +92,13 @@ class CardScannerController extends ValueNotifier<CardScannerState> {
   StreamSubscription<CameraHandle>? _preview;
   Completer<CardScanResult>? _once;
   TextBox? _regionOfInterest;
+  DateTime? _reshapedAt;
   bool _disposed = false;
+
+  /// How long frames are dropped after a rotation if the new region of
+  /// interest is never acknowledged. Without a ceiling a controller driven
+  /// without a view, which is what sets the region, would stall for good.
+  static const _settleTimeout = Duration(milliseconds: 400);
 
   /// Emits every time the aggregated result changes.
   Stream<CardScanResult> get results => _results.stream;
@@ -118,7 +124,9 @@ class CardScannerController extends ValueNotifier<CardScannerState> {
       // A device rotation reshapes the preview; the view watches this to
       // redraw the texture and move the region of interest with it.
       _preview = _platform.previewUpdates.listen((handle) {
-        if (value.isRunning) value = value.copyWith(camera: handle);
+        if (!value.isRunning) return;
+        _reshapedAt = DateTime.now();
+        value = value.copyWith(camera: handle);
       });
       value = value.copyWith(camera: camera, isRunning: true);
     } on CardScannerException catch (e) {
@@ -136,6 +144,7 @@ class CardScannerController extends ValueNotifier<CardScannerState> {
     await _preview?.cancel();
     _preview = null;
     await _platform.stop();
+    _reshapedAt = null;
     // dispose() stops the camera too, and the platform call above gives the
     // notifier time to be torn down before this returns.
     if (_disposed) return;
@@ -168,7 +177,10 @@ class CardScannerController extends ValueNotifier<CardScannerState> {
   /// this automatically to match the card frame.
   Future<void> setRegionOfInterest(TextBox box) async {
     _regionOfInterest = box;
-    if (value.isRunning) await _platform.setRegionOfInterest(box);
+    if (!value.isRunning) return;
+    await _platform.setRegionOfInterest(box);
+    // The region now matches the preview again, so frames can be trusted.
+    _reshapedAt = null;
   }
 
   /// Starts scanning (if needed) and completes with the first complete
@@ -182,6 +194,16 @@ class CardScannerController extends ValueNotifier<CardScannerState> {
 
   void _onFrame(RecognizedFrame frame) {
     if (value.isComplete) return;
+
+    // A frame recognized before a rotation reached the camera describes the
+    // previous geometry: its boxes are in the old orientation and were
+    // filtered by the old region of interest. Scoring it would move a field
+    // relative to the number and could confirm text from off the card.
+    final reshaped = _reshapedAt;
+    if (reshaped != null) {
+      if (DateTime.now().difference(reshaped) < _settleTimeout) return;
+      _reshapedAt = null;
+    }
 
     final parsed = CardFrameParser.parse(frame);
     final result = _session.add(parsed);
