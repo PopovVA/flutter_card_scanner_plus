@@ -11,6 +11,18 @@
   interface, which is only needed to fake the platform in tests, has to
   provide it.
 
+### API
+
+- `CardholderName.split` and `CardScanResult.splitName` divide a printed name
+  into given and family parts, keeping middle names and initials with the
+  given name and particles with the surname. A card prints one line and never
+  says where the surname starts, so this is a convention; let people correct
+  it.
+- `CardFrameParser.groupIntoRows` is public, with `groupRowParts` beside it.
+  See the recognition section.
+- The default colour of the controls over the preview is unchanged: it still
+  follows `AppBarTheme`, with `foregroundColor` to override it.
+
 ### The built-in UI
 
 - The default overlay says what the scanner is still looking for rather than

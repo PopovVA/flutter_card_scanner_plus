@@ -8,6 +8,7 @@ library;
 export 'src/core/card_brand.dart';
 export 'src/core/card_frame_parser.dart' show CardFrameParser, FrameParseResult;
 export 'src/core/card_scan_result.dart';
+export 'src/core/cardholder_name.dart';
 export 'src/core/expiry_parser.dart' show ExpiryCandidate, ExpiryParser;
 export 'src/core/frame_aggregator.dart';
 export 'src/core/luhn.dart';

@@ -203,6 +203,18 @@ final card = await CardScannerPage.show(
 final controller = CardScannerController(session: MyOwnSession());
 ```
 
+## Given and family name
+
+Cards print one line and never say where the surname starts, so a payment form that wants two fields has to guess. `CardholderName` guesses the usual way: the last word is the surname, anything before it is the given name, and a particle in front of the surname belongs to it.
+
+```dart
+final name = result.splitName;       // null when no name was recognized
+name?.given;   // MARIA
+name?.family;  // DE LA CRUZ
+```
+
+It handles middle names and initials ("WREN A. NGUYEN") and the particles da, das, de, del, della, den, der, di, do, dos, du, la, le, van and von. It will get some names wrong, so let people correct it.
+
 ## Text, prompts and failures
 
 The built-in page tells the user what it is still looking for, shows a spinner while it works, and offers a way out when the camera will not open.

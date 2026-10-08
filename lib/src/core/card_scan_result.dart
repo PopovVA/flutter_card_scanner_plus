@@ -1,6 +1,7 @@
 import 'package:meta/meta.dart';
 
 import 'card_brand.dart';
+import 'cardholder_name.dart';
 
 /// Result of a card scan. Fields are `null` until recognized.
 ///
@@ -53,6 +54,11 @@ class CardScanResult {
 
   /// Last four digits, or `null`.
   String? get last4 => number?.substring(number!.length - 4);
+
+  /// [cardholderName] split into given and family parts, or `null` if no
+  /// name was recognized. See [CardholderName] for how it guesses.
+  CardholderName? get splitName =>
+      cardholderName == null ? null : CardholderName.split(cardholderName!);
 
   /// `MM/YY`, or `null`.
   String? get formattedExpiry {
