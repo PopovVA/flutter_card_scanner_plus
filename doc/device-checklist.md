@@ -42,6 +42,33 @@ cd example && flutter run --release
 | Discover, JCB, Diners Club or UnionPay, if you have one | Recognized, correctly branded and grouped |
 | A card whose name OCR splits into separate words | Full name, not one word |
 
+## Browser
+
+The camera needs a secure context, so the example has to be served over
+HTTPS to reach a phone on the same network. `flutter run -d chrome` covers
+a laptop; a phone needs a certificate:
+
+```bash
+cd example
+dart run flutter_card_scanner_plus:install_web
+flutter build web --release
+# then serve build/web over HTTPS on the LAN, for instance
+#   npx http-server build/web -S -C cert.pem -K key.pem -p 8443
+```
+
+| Step | Expected |
+|---|---|
+| iOS Safari and Android Chrome, scan a card | Reads it; the first frame takes a second or two while the engine loads |
+| Close the scanner while the permission prompt is up, then answer it | The camera never turns on: no indicator, no green dot |
+| Send the browser to the background while the camera is opening, come back | One camera, not two, and the preview returns |
+| Turn the phone sideways | Preview and guide both follow, and the card still reads |
+| The torch button | Present only when the browser admits to a torch, and it lights |
+| A name with a colour in it, "ALICE GREEN" | Read whole, not cut down to "ALICE" |
+| Refuse camera access, then press Retry | The message explains, Retry reopens, the close button works throughout |
+| An embedded browser, a link opened inside another app | Either scans or says the browser cannot, never a black screen |
+| Serve it over plain HTTP | Says the browser cannot open a camera, rather than failing silently |
+| Watch the network tab during a scan | Requests only to your own origin |
+
 ## While waiting
 
 | Step | Expected |

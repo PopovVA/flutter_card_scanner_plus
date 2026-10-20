@@ -57,12 +57,14 @@ class CardScannerException implements Exception {
 @immutable
 class CameraHandle {
   /// A preview of [previewWidth] by [previewHeight] pixels, drawn from
-  /// [textureId] and needing [rotation] degrees to stand upright.
+  /// [textureId] and needing [rotation] degrees to stand upright, on a
+  /// camera that has a torch when [torchAvailable].
   const CameraHandle({
     required this.textureId,
     required this.previewWidth,
     required this.previewHeight,
     this.rotation = 0,
+    this.torchAvailable = true,
   });
 
   /// Texture to render with `Texture(textureId: ...)`.
@@ -80,6 +82,14 @@ class CameraHandle {
   /// buffers; iOS rotates them natively and reports 0.
   final int rotation;
 
+  /// Whether this camera has a torch worth offering.
+  ///
+  /// A browser is the reason this exists: several report a torch they
+  /// cannot light, so the web implementation asks the track and says no
+  /// when it is not sure. The native platforms accept the request and let
+  /// the device decide, so they report `true`.
+  final bool torchAvailable;
+
   /// [rotation] as quarter turns, ready for a `RotatedBox`.
   int get quarterTurns => (rotation ~/ 90) % 4;
 
@@ -93,6 +103,7 @@ class CameraHandle {
     previewWidth: (map['previewWidth'] as num).toInt(),
     previewHeight: (map['previewHeight'] as num).toInt(),
     rotation: (map['rotation'] as num?)?.toInt() ?? 0,
+    torchAvailable: map['torchAvailable'] as bool? ?? true,
   );
 
   @override
@@ -101,11 +112,17 @@ class CameraHandle {
       other.textureId == textureId &&
       other.previewWidth == previewWidth &&
       other.previewHeight == previewHeight &&
-      other.rotation == rotation;
+      other.rotation == rotation &&
+      other.torchAvailable == torchAvailable;
 
   @override
-  int get hashCode =>
-      Object.hash(textureId, previewWidth, previewHeight, rotation);
+  int get hashCode => Object.hash(
+    textureId,
+    previewWidth,
+    previewHeight,
+    rotation,
+    torchAvailable,
+  );
 
   @override
   String toString() =>

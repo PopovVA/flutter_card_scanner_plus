@@ -163,12 +163,21 @@ class _CardScannerPageState extends State<CardScannerPage> {
         actions: [
           ValueListenableBuilder<CardScannerState>(
             valueListenable: _controller,
-            builder: (context, state, _) => IconButton(
-              color: fg,
-              disabledColor: fg.withValues(alpha: 0.4),
-              icon: Icon(state.torchEnabled ? Icons.flash_on : Icons.flash_off),
-              onPressed: state.isRunning ? _controller.toggleTorch : null,
-            ),
+            builder: (context, state, _) {
+              // A camera without a torch gets no button at all: a disabled
+              // one invites tapping and explains nothing.
+              if (state.camera?.torchAvailable == false) {
+                return const SizedBox.shrink();
+              }
+              return IconButton(
+                color: fg,
+                disabledColor: fg.withValues(alpha: 0.4),
+                icon: Icon(
+                  state.torchEnabled ? Icons.flash_on : Icons.flash_off,
+                ),
+                onPressed: state.isRunning ? _controller.toggleTorch : null,
+              );
+            },
           ),
         ],
       ),

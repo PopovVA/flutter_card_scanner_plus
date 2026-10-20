@@ -165,6 +165,32 @@ void main() {
       expect(fake.stops, 0);
     });
 
+    testWidgets('a focus change during the permission prompt opens nothing', (
+      tester,
+    ) async {
+      final fake = FakeScannerPlatform(_handle);
+      final controller = CardScannerController(platform: fake);
+      addTearDown(controller.dispose);
+
+      // A browser prompt can sit there for minutes, and showing it takes
+      // the focus away. Treating that as "went to the background" and
+      // reopening on return would open a second camera.
+      fake.holdStart = Completer<void>();
+      await tester.pumpWidget(
+        MaterialApp(home: CardScannerView(controller: controller)),
+      );
+      await tester.pump();
+
+      await background(tester);
+      await foreground(tester);
+      fake.holdStart!.complete();
+      await tester.idle();
+      await tester.pump();
+
+      expect(fake.starts, 1);
+      expect(fake.stops, 0);
+    });
+
     testWidgets('a camera that was not running is not started on return', (
       tester,
     ) async {
