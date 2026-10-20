@@ -42,6 +42,8 @@
   `ClipRect` and the `BoxFit.cover` scaling, because the region of interest
   is computed from that same geometry.
 
+## 0.2.1
+
 ### Recognition
 
 - A card word that is also a common name keeps its place in one. `BLACK`,
