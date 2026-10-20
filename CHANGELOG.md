@@ -1,3 +1,40 @@
+## Unreleased
+
+### Recognition
+
+- A card word that is also a common name keeps its place in one. `BLACK`,
+  `BLUE`, `CASH`, `CHASE`, `CHIP`, `GOLD`, `GOOD`, `GREEN`, `MASTER`,
+  `SAPPHIRE`, `SILVER`, `WELLS` and `WISE` are in the new
+  `NameParser.nameLikeStopWords`, and are read as part of a name when the
+  same line carries a word that can only be a name. "ALICE GREEN" and
+  "JOHN A BLACK" were being cut down to "ALICE" and "JOHN A"; "VISA GOLD"
+  and "CHASE SAPPHIRE" are still card art.
+
+### Splitting a name
+
+- The first word of a printed name is always the given name.
+  `CardholderName.split('DEL SMITH')` gave no given name and the surname
+  "DEL SMITH", because DEL is also a particle. So were LE and DU, which are
+  given names at least as often.
+- A generational suffix stays with the surname.
+  `split('JOHN SMITH JR')` gave the surname "JR". `CardholderName.suffixes`
+  holds JR, SR, II, III and IV, and punctuation is ignored.
+- `split('DE LA CRUZ')` now gives "DE" and "LA CRUZ" rather than no given
+  name at all, which follows from the rule above.
+
+### Frame
+
+- `CardScannerView.maxFrameWidth` caps the frame at 440 logical pixels,
+  whatever the fractions allow. On an 810 by 1080 tablet the frame was 713
+  by 450, and in landscape 950 by 599, so a card had to be held against the
+  lens to fill it. Phones are unaffected: 88% of a 390 point screen is
+  already narrower than the limit.
+
+### Documentation
+
+- Every public declaration carries its own dartdoc, and
+  `public_member_api_docs` is enabled so it stays that way.
+
 ## 0.2.0
 
 ### Breaking

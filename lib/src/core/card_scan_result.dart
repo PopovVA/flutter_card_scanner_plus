@@ -8,6 +8,9 @@ import 'cardholder_name.dart';
 /// [toString] never prints the full card number.
 @immutable
 class CardScanResult {
+  /// A result holding whichever of [number], [brand], [expiryMonth],
+  /// [expiryYear] and [cardholderName] has been confirmed, and whether
+  /// that is enough to be [isComplete].
   const CardScanResult({
     this.number,
     this.brand,
@@ -17,11 +20,13 @@ class CardScanResult {
     this.isComplete = false,
   });
 
+  /// A result in which nothing has been recognized yet.
   static const empty = CardScanResult();
 
   /// Digits only, e.g. `4111111111111111`.
   final String? number;
 
+  /// The network [number] belongs to.
   final CardBrand? brand;
 
   /// `1..12`.
@@ -37,8 +42,13 @@ class CardScanResult {
   /// multiple frames. See `ScanRequirements`.
   final bool isComplete;
 
+  /// Whether a card number has been confirmed.
   bool get hasNumber => number != null;
+
+  /// Whether a complete expiry date has been confirmed.
   bool get hasExpiry => expiryMonth != null && expiryYear != null;
+
+  /// Whether a cardholder name has been confirmed.
   bool get hasName => cardholderName != null;
 
   /// Number grouped for display, e.g. `4111 1111 1111 1111`.
@@ -76,6 +86,9 @@ class CardScanResult {
     return expiryMonth! < today.month;
   }
 
+  /// A copy of this result with each given field replaced.
+  ///
+  /// A `null` argument leaves its field alone, so this cannot clear one.
   CardScanResult copyWith({
     String? number,
     CardBrand? brand,

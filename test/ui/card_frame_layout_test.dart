@@ -6,10 +6,23 @@ import 'package:flutter_test/flutter_test.dart';
 const portraitPhone = Size(393, 852);
 const landscapePhone = Size(852, 393);
 const landscapeTablet = Size(1194, 834);
+const portraitTabletSmall = Size(810, 1080);
+const landscapeTabletSmall = Size(1080, 810);
+const smallPhone = Size(390, 844);
+
+/// ID-1, the shape every payment card is cut to.
+const cardAspect = CardScannerView.iso7810AspectRatio;
+
+/// The width the view will not exceed, whatever the screen.
+const maxWidth = 440.0;
 
 /// Drives the view's layout without a camera by reading the rect the
 /// overlay builder receives.
-Future<Rect> cardRectFor(WidgetTester tester, Size size) async {
+Future<Rect> cardRectFor(
+  WidgetTester tester,
+  Size size, {
+  double maxFrameWidth = 440,
+}) async {
   late Rect captured;
   tester.view
     ..physicalSize = size
@@ -21,6 +34,7 @@ Future<Rect> cardRectFor(WidgetTester tester, Size size) async {
       home: CardScannerView(
         controller: CardScannerController(),
         autoStart: false,
+        maxFrameWidth: maxFrameWidth,
         overlayBuilder: (context, state, cardRect) {
           captured = cardRect;
           return const SizedBox.shrink();
@@ -32,6 +46,39 @@ Future<Rect> cardRectFor(WidgetTester tester, Size size) async {
 }
 
 void main() {
+  group('a tablet does not get a frame the size of the screen', () {
+    testWidgets('portrait', (tester) async {
+      final rect = await cardRectFor(tester, portraitTabletSmall);
+      expect(rect.width, lessThanOrEqualTo(maxWidth + 0.5));
+      expect(rect.width / rect.height, closeTo(cardAspect, 0.01));
+      expect(rect.right, lessThanOrEqualTo(portraitTabletSmall.width + 0.5));
+      expect(rect.bottom, lessThanOrEqualTo(portraitTabletSmall.height + 0.5));
+    });
+
+    testWidgets('landscape', (tester) async {
+      final rect = await cardRectFor(tester, landscapeTabletSmall);
+      expect(rect.width, lessThanOrEqualTo(maxWidth + 0.5));
+      expect(rect.width / rect.height, closeTo(cardAspect, 0.01));
+      expect(rect.right, lessThanOrEqualTo(landscapeTabletSmall.width + 0.5));
+      expect(rect.bottom, lessThanOrEqualTo(landscapeTabletSmall.height + 0.5));
+    });
+
+    testWidgets('a phone is unaffected by the limit', (tester) async {
+      final rect = await cardRectFor(tester, smallPhone);
+      expect(rect.width, closeTo(smallPhone.width * 0.88, 0.5));
+      expect(rect.width / rect.height, closeTo(cardAspect, 0.01));
+    });
+
+    testWidgets('the limit is configurable', (tester) async {
+      final rect = await cardRectFor(
+        tester,
+        portraitTabletSmall,
+        maxFrameWidth: 600,
+      );
+      expect(rect.width, closeTo(600, 0.5));
+    });
+  });
+
   group('card frame fits the screen', () {
     testWidgets('portrait', (tester) async {
       final rect = await cardRectFor(tester, portraitPhone);

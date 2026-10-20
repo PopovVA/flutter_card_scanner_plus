@@ -22,6 +22,14 @@ typedef CardScannerOverlayBuilder = Widget Function(
 /// [CardFrameOverlay] is shown. The OCR region of interest is kept in sync
 /// with the frame automatically.
 class CardScannerView extends StatefulWidget {
+  /// A preview driven by [controller], with [overlayBuilder] drawn over
+  /// it, started on layout unless [autoStart] is cleared.
+  ///
+  /// The frame is a [cardAspectRatio] rectangle no wider than
+  /// [frameWidthFraction] of the view, [frameHeightFraction] of its
+  /// height or [maxFrameWidth] logical pixels, placed by
+  /// [frameAlignment]. [frameRegionPadding] widens the area read around
+  /// it, and [backgroundColor] shows until the first frame arrives.
   const CardScannerView({
     super.key,
     required this.controller,
@@ -30,23 +38,29 @@ class CardScannerView extends StatefulWidget {
     this.cardAspectRatio = CardScannerView.iso7810AspectRatio,
     this.frameWidthFraction = 0.88,
     this.frameHeightFraction = 0.6,
+    this.maxFrameWidth = 440,
     this.frameAlignment = const Alignment(0, -0.2),
     this.frameRegionPadding = 0,
     this.backgroundColor = Colors.black,
   }) : assert(frameWidthFraction > 0 && frameWidthFraction <= 1),
        assert(frameHeightFraction > 0 && frameHeightFraction <= 1),
+       assert(maxFrameWidth > 0),
        assert(frameRegionPadding >= 0);
 
   /// ID-1 card: 85.60 × 53.98 mm.
   static const double iso7810AspectRatio = 85.60 / 53.98;
 
+  /// Drives the camera and holds the result.
   final CardScannerController controller;
+
+  /// Draws the UI over the preview. Defaults to [CardFrameOverlay].
   final CardScannerOverlayBuilder? overlayBuilder;
 
   /// Call [CardScannerController.start] when first laid out, and again if
   /// [controller] is later replaced.
   final bool autoStart;
 
+  /// Width over height of the frame. Defaults to [iso7810AspectRatio].
   final double cardAspectRatio;
 
   /// Frame width relative to the view width. The frame never exceeds this,
@@ -56,6 +70,15 @@ class CardScannerView extends StatefulWidget {
   /// Frame height relative to the view height. This is what keeps the frame
   /// on screen in landscape, where 88% of the width is taller than the view.
   final double frameHeightFraction;
+
+  /// Largest frame width in logical pixels, whatever the fractions allow.
+  ///
+  /// A fraction of the width is the wrong measure on a big screen: 88% of a
+  /// tablet is wider than a card held at a comfortable distance, so the card
+  /// has to be pressed against the lens to fill the frame. A card is about
+  /// the same size in everyone's hand, so the frame has an absolute limit
+  /// too.
+  final double maxFrameWidth;
 
   /// Where the frame sits within the view.
   final Alignment frameAlignment;
@@ -131,6 +154,7 @@ class _CardScannerViewState extends State<CardScannerView>
         old.cardAspectRatio != widget.cardAspectRatio ||
         old.frameWidthFraction != widget.frameWidthFraction ||
         old.frameHeightFraction != widget.frameHeightFraction ||
+        old.maxFrameWidth != widget.maxFrameWidth ||
         old.frameAlignment != widget.frameAlignment ||
         old.frameRegionPadding != widget.frameRegionPadding) {
       _lastSize = null;
@@ -145,10 +169,13 @@ class _CardScannerViewState extends State<CardScannerView>
     }
   }
 
-  /// The largest card shaped rect that fits both fractions, centred by
+  /// The largest card shaped rect that fits every limit, centred by
   /// [CardScannerView.frameAlignment].
   Rect _cardRect(Size size) {
-    var width = size.width * widget.frameWidthFraction;
+    var width = math.min(
+      size.width * widget.frameWidthFraction,
+      widget.maxFrameWidth,
+    );
     var height = width / widget.cardAspectRatio;
 
     // Landscape: the width driven height would run off the screen, so the

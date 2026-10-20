@@ -68,6 +68,51 @@ void main() {
     });
   });
 
+  group('card words that are also names', () {
+    test('a colour or a bank keeps its place beside a plain word', () {
+      expect(nameIn([at('ALICE GREEN', 0.06, 0.78)]), 'ALICE GREEN');
+      expect(nameIn([at('JOHN A BLACK', 0.06, 0.78)]), 'JOHN A BLACK');
+      expect(nameIn([at('MARY SILVER', 0.06, 0.78)]), 'MARY SILVER');
+      expect(nameIn([at('CHASE SMITH', 0.06, 0.78)]), 'CHASE SMITH');
+      expect(nameIn([at('ROSA GOLD', 0.06, 0.78)]), 'ROSA GOLD');
+    });
+
+    test('the same word alone is still card art', () {
+      expect(nameIn([at('VISA GOLD', 0.06, 0.78)]), isNull);
+      expect(nameIn([at('AMEX GREEN', 0.06, 0.78)]), isNull);
+      expect(nameIn([at('CHASE SAPPHIRE', 0.06, 0.78)]), isNull);
+      expect(nameIn([at('BLACK CARD', 0.06, 0.78)]), isNull);
+      expect(nameIn([at('WELLS FARGO', 0.06, 0.78)]), isNull);
+      expect(
+        nameIn([at('CHASE SAPPHIRE PREFERRED', 0.06, 0.78, w: 0.5)]),
+        isNull,
+      );
+    });
+
+    test('a row keeps the whole name, whichever end the card word sits at', () {
+      expect(
+        nameIn([
+          at('JOHN', 0.06, 0.78, w: 0.12),
+          at('A', 0.2, 0.78, w: 0.04),
+          at('BLACK', 0.26, 0.78, w: 0.16),
+        ]),
+        'JOHN A BLACK',
+      );
+      expect(
+        nameIn([at('ALICE', 0.06, 0.78, w: 0.16), at('GREEN', 0.24, 0.78)]),
+        'ALICE GREEN',
+      );
+      expect(
+        nameIn([at('GREEN', 0.06, 0.78, w: 0.16), at('ALICE', 0.24, 0.78)]),
+        'GREEN ALICE',
+      );
+    });
+
+    test('every name-like word is also an ordinary stop word', () {
+      expect(NameParser.stopWords, containsAll(NameParser.nameLikeStopWords));
+    });
+  });
+
   group('name shapes', () {
     test('a middle initial', () {
       expect(

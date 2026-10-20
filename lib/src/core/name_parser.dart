@@ -5,6 +5,8 @@ import 'recognized_text.dart';
 /// A cardholder name found in OCR output.
 @immutable
 class NameCandidate {
+  /// A [name] read from [box] with the engine's [confidence] and the
+  /// parser's [score] for where it sat on the card.
   const NameCandidate({
     required this.name,
     required this.box,
@@ -14,12 +16,17 @@ class NameCandidate {
 
   /// Upper-case name as printed, e.g. `JOHN A SMITH`.
   final String name;
+
+  /// Where the name was printed, which is most of what [score] is made of.
   final TextBox box;
+
+  /// `0..1`, the engine's confidence in the words this came from.
   final double confidence;
 
   /// Heuristic ranking score; higher is more likely to be the holder name.
   final int score;
 
+  /// A copy of this candidate scored [value] instead.
   NameCandidate withScore(int value) =>
       NameCandidate(name: name, box: box, confidence: confidence, score: value);
 
@@ -73,6 +80,28 @@ abstract final class NameParser {
     'TERMS', 'CONDITIONS', 'WWW', 'COM', 'HTTP', 'HTTPS',
   };
 
+  /// Card words that are also common given names and surnames.
+  ///
+  /// Every one of these is in [stopWords] too, because on its own it is far
+  /// more likely to be card art than a person. It is only read as part of a
+  /// name when the same line carries a word that cannot be anything else,
+  /// which is what separates "ALICE GREEN" from "AMEX GREEN".
+  static const Set<String> nameLikeStopWords = {
+    'BLACK',
+    'BLUE',
+    'CASH',
+    'CHASE',
+    'CHIP',
+    'GOLD',
+    'GOOD',
+    'GREEN',
+    'MASTER',
+    'SAPPHIRE',
+    'SILVER',
+    'WELLS',
+    'WISE',
+  };
+
   static final RegExp _linePattern = RegExp(
     r"^[A-Z][A-Z'\-\.]*(?: [A-Z][A-Z'\-\.]*){1,3}$",
   );
@@ -85,15 +114,34 @@ abstract final class NameParser {
     if (!_linePattern.hasMatch(normalized)) return false;
 
     final words = normalized.split(' ');
+    final hasPlainWord = _hasPlainWord(words);
     var realWords = 0;
     for (final word in words) {
       final bare = _bare(word);
       if (bare.isEmpty) return false;
-      if (stopWords.contains(bare)) return false;
+      if (stopWords.contains(bare) &&
+          !(hasPlainWord && nameLikeStopWords.contains(bare))) {
+        return false;
+      }
       if (bare.length > 1) realWords++;
     }
     // Initials ("J.", "C F") are fine, but at least one full word is needed.
     return realWords >= 1;
+  }
+
+  /// Whether [words] holds something that can only be a name: more than one
+  /// letter, shaped like a word, and not printed on cards.
+  ///
+  /// This is what lets a colour or a bank keep its place in a name. Without
+  /// a word of its own the line is card art, however it is arranged.
+  static bool _hasPlainWord(List<String> words) {
+    for (final word in words) {
+      final bare = _bare(word);
+      if (bare.length < 2) continue;
+      if (stopWords.contains(bare)) continue;
+      if (_wordPattern.hasMatch(word)) return true;
+    }
+    return false;
   }
 
   /// Ranks all name-like [lines] and returns the best candidate.
@@ -149,12 +197,15 @@ abstract final class NameParser {
       }
     }
 
+    final hasPlainWord = _hasPlainWord(
+      words.map((w) => w.text).toList(growable: false),
+    );
     var start = 0;
     var end = words.length;
-    while (start < end && _isNoise(words[start].text)) {
+    while (start < end && _isNoise(words[start].text, hasPlainWord)) {
       start++;
     }
-    while (end > start && _isNoise(words[end - 1].text)) {
+    while (end > start && _isNoise(words[end - 1].text, hasPlainWord)) {
       end--;
     }
     if (start == end) return null;
@@ -176,10 +227,15 @@ abstract final class NameParser {
 
   /// Whether [word] can never be part of a printed name: a known card word,
   /// or anything that is not letters with name punctuation.
-  static bool _isNoise(String word) {
+  ///
+  /// [hasPlainWord] says whether the line carries a word that can only be a
+  /// name, which is what lets a colour or a bank stay in it.
+  static bool _isNoise(String word, bool hasPlainWord) {
     final bare = _bare(word);
     if (bare.isEmpty) return true;
-    if (stopWords.contains(bare)) return true;
+    if (stopWords.contains(bare)) {
+      return !(hasPlainWord && nameLikeStopWords.contains(bare));
+    }
     return !_wordPattern.hasMatch(word);
   }
 

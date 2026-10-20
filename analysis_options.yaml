@@ -10,5 +10,11 @@ analyzer:
     - macos/**
     - linux/**
 
+linter:
+  rules:
+    # Every public declaration carries its own explanation, so the API docs
+    # stand on their own rather than sending people to the source.
+    - public_member_api_docs
+
 # Additional information about this file can be found at
 # https://dart.dev/guides/language/analysis-options

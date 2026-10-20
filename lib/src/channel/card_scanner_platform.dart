@@ -8,17 +8,30 @@ import '../core/recognized_text.dart';
 /// Error raised by the native camera/OCR layer.
 @immutable
 class CardScannerException implements Exception {
+  /// An error identified by [code], with an optional human readable
+  /// [message] from the platform.
   const CardScannerException(this.code, [this.message]);
 
   /// One of [permissionDenied], [noCamera], [cameraError],
   /// [alreadyRunning], [cameraInterrupted], [cameraDetached], [cancelled]
   /// or a platform-specific code.
   final String code;
+
+  /// What the platform said about it, when it said anything. Useful in a
+  /// log; too specific to show to a user.
   final String? message;
 
+  /// The user refused camera access, or the browser blocked it.
   static const permissionDenied = 'permissionDenied';
+
+  /// The device has no camera the scanner can use.
   static const noCamera = 'noCamera';
+
+  /// The camera could not be opened or stopped working, with no more
+  /// specific cause.
   static const cameraError = 'cameraError';
+
+  /// A session is already open. Stop it before starting another.
   static const alreadyRunning = 'alreadyRunning';
 
   /// Another app holds the camera.
@@ -31,6 +44,8 @@ class CardScannerException implements Exception {
   /// the controller swallows it.
   static const cancelled = 'cancelled';
 
+  /// Whether this is [permissionDenied], which is the one error worth its
+  /// own screen: it is the user's to resolve, not the app's.
   bool get isPermissionDenied => code == permissionDenied;
 
   @override
@@ -41,6 +56,8 @@ class CardScannerException implements Exception {
 /// Returned by [CardScannerPlatform.start].
 @immutable
 class CameraHandle {
+  /// A preview of [previewWidth] by [previewHeight] pixels, drawn from
+  /// [textureId] and needing [rotation] degrees to stand upright.
   const CameraHandle({
     required this.textureId,
     required this.previewWidth,
@@ -54,6 +71,8 @@ class CameraHandle {
   /// Preview dimensions in pixels, upright (portrait) orientation — i.e.
   /// after [rotation] has been applied.
   final int previewWidth;
+
+  /// Preview height in pixels, measured the same way as [previewWidth].
   final int previewHeight;
 
   /// Clockwise rotation in degrees (0/90/180/270) to apply to the raw
@@ -61,10 +80,14 @@ class CameraHandle {
   /// buffers; iOS rotates them natively and reports 0.
   final int rotation;
 
+  /// [rotation] as quarter turns, ready for a `RotatedBox`.
   int get quarterTurns => (rotation ~/ 90) % 4;
 
+  /// Preview width over height, after rotation.
   double get aspectRatio => previewWidth / previewHeight;
 
+  /// Reads a handle from the platform channel's [map]. A platform that
+  /// delivers upright frames itself reports no rotation.
   factory CameraHandle.fromMap(Map<Object?, Object?> map) => CameraHandle(
     textureId: (map['textureId'] as num).toInt(),
     previewWidth: (map['previewWidth'] as num).toInt(),
@@ -91,13 +114,20 @@ class CameraHandle {
 
 /// Contract implemented by the native side. Replace [instance] in tests.
 abstract class CardScannerPlatform {
+  /// The implementation the package uses. Assign a fake in tests.
   static CardScannerPlatform instance = MethodChannelCardScannerPlatform();
 
   /// Opens the camera and starts OCR. Throws [CardScannerException].
   Future<CameraHandle> start({TextBox? regionOfInterest});
 
+  /// Closes the camera and releases the preview.
+  ///
+  /// Completes only once the platform has finished tearing the session
+  /// down, so the next [start] gets a camera that is actually free.
   Future<void> stop();
 
+  /// Turns the torch on when [enabled], off otherwise. Does nothing on a
+  /// camera without one.
   Future<void> setTorch(bool enabled);
 
   /// Restricts OCR to [box] (normalized preview coordinates, top-left origin).
@@ -128,6 +158,8 @@ abstract class CardScannerPlatform {
 
 /// Default implementation talking to the plugin over platform channels.
 class MethodChannelCardScannerPlatform implements CardScannerPlatform {
+  /// Talks to the plugin over the package's own channels, or over
+  /// [methodChannel] and [eventChannel] when a test supplies them.
   MethodChannelCardScannerPlatform({
     @visibleForTesting MethodChannel? methodChannel,
     @visibleForTesting EventChannel? eventChannel,
