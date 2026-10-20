@@ -317,6 +317,25 @@ void main() {
       expect(feed(agg, frame(pan: visa, expiry: '12/28')).isComplete, isTrue);
     });
 
+    test('web votes on fewer frames, because fewer arrive', () {
+      const web = ScanRequirements.web;
+      expect(web.panVotes, lessThan(ScanRequirements.standard.panVotes));
+      expect(web.windowSize, lessThan(ScanRequirements.standard.windowSize));
+      expect(web.preferredTimeout, ScanRequirements.twoSided.preferredTimeout);
+
+      final agg = FrameAggregator(requirements: web);
+      // One frame a second, which is what the browser engine manages.
+      feed(
+        agg,
+        frame(pan: visa, expiry: '12/28'),
+        times: 2,
+        every: const Duration(seconds: 1),
+      );
+      expect(agg.current.number, visa);
+      expect(agg.current.formattedExpiry, '12/28');
+      expect(agg.current.isComplete, isFalse, reason: 'still wants the name');
+    });
+
     test('reset clears everything', () {
       final agg = FrameAggregator(requirements: ScanRequirements.fast);
       feed(agg, frame(pan: visa, expiry: '12/28'));

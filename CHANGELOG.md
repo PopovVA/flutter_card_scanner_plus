@@ -1,5 +1,31 @@
 ## Unreleased
 
+### Web
+
+- The scanner runs in a browser. Camera through `getUserMedia`, preview as
+  a `<video>` element behind a platform view, recognition by PaddleOCR
+  PP-OCRv4 in a Web Worker. The Dart core, the frame, the voting and the
+  parser are the same ones the phones use.
+- `dart run flutter_card_scanner_plus:install_web` puts the engine in an
+  app's `web/` folder: about 38 MB of OpenCV, ONNX runtime WebAssembly and
+  models, fetched from npm at pinned versions and checked against pinned
+  hashes. They are deliberately not package assets, which would add 38 MB
+  to every iOS and Android build.
+- `ScanRequirements.web` votes on fewer frames, because a browser manages
+  about one a second rather than eight.
+- `CameraHandle.torchAvailable` says whether the camera has a torch worth
+  offering. Several browsers report one they cannot light, so the web
+  implementation asks the track and says no when it is not sure, and
+  `CardScannerPage` hides the button rather than disabling it.
+- Three failed frames in a row report `ocrUnavailable` and replace the
+  worker, instead of a scan that can never finish. A frame has 20 seconds
+  and the engine has two minutes to load.
+- An open camera that arrives after the scanner was closed closes itself.
+  A browser permission prompt can sit on screen for minutes, and the camera
+  stayed on when the answer came too late.
+- `README.md` carries the Content-Security-Policy the worker needs and what
+  it is for.
+
 ### Breaking
 
 - `CardScannerPlatform` gained `buildPreview`. Anything implementing that

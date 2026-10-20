@@ -31,3 +31,12 @@ migrate_working_dir/
 .flutter-plugins-dependencies
 /build/
 /coverage/
+
+# The browser OCR engine: 38 MB fetched by
+# `dart run flutter_card_scanner_plus:install_web`, not committed.
+example/web/flutter_card_scanner_plus/
+
+# Build inputs for the worker bundle in assets/, which is committed.
+# package-lock.json is committed on purpose: it pins the bytes that end up
+# in the bundle, so CI can check the committed bundle still matches.
+tool/ocr_worker/node_modules/

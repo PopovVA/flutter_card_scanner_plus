@@ -109,6 +109,21 @@ class ScanRequirements {
     nameVotes: 1,
   );
 
+  /// Tuned for the browser, where recognition manages about one frame a
+  /// second rather than eight.
+  ///
+  /// Fewer votes and a shorter window, because at that rate three agreeing
+  /// frames is three seconds of holding a card still and twelve frames of
+  /// history reaches back to a card that has since been turned over. The
+  /// long wait for the name is the same as [twoSided].
+  static const web = ScanRequirements(
+    panVotes: 2,
+    expiryVotes: 2,
+    nameVotes: 2,
+    windowSize: 8,
+    preferredTimeout: Duration(seconds: 15),
+  );
+
   /// For cards that print the name on the other side: long enough for the
   /// holder to notice the prompt, turn the card over and hold it still.
   static const twoSided = ScanRequirements(

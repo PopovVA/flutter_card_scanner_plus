@@ -63,6 +63,45 @@ jobs:
       - run: flutter build ios --debug --no-codesign
         working-directory: example
 
+  web:
+    name: Build example (web)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+        working-directory: example
+      # Fetches the OCR engine, about 38 MB, the same way an app does. It
+      # also proves the installer still works against the pinned versions.
+      - run: dart run flutter_card_scanner_plus:install_web
+        working-directory: example
+      - run: flutter build web --release
+        working-directory: example
+
+  worker:
+    name: Worker bundle is current
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # ci, not install: the lockfile is what makes the bundle the same
+      # bytes here as on the machine that committed it.
+      - run: npm ci --no-audit --no-fund
+        working-directory: tool/ocr_worker
+      - run: npx tsc --noEmit
+        working-directory: tool/ocr_worker
+      # The committed bundle has to match its sources, or an app would get
+      # a worker nobody reviewed.
+      - run: npm run build
+        working-directory: tool/ocr_worker
+      - name: The bundle in assets/ matches tool/ocr_worker
+        run: git diff --exit-code -- assets/card_ocr_worker.js
+
   publish-dry-run:
     name: pub.dev dry run
     runs-on: ubuntu-latest
