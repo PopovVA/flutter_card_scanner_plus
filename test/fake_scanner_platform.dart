@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_card_scanner_plus/flutter_card_scanner_plus.dart';
 
 /// A camera that never opens, but lets a test push rotations.
@@ -71,6 +72,10 @@ class FakeScannerPlatform implements CardScannerPlatform {
 
   @override
   Stream<CardScannerException> get errors => _errors.stream;
+
+  @override
+  Widget buildPreview(CameraHandle handle) =>
+      const ColoredBox(color: Color(0xFF123456));
 
   @override
   Future<RecognizedFrame> recognizeImage(

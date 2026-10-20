@@ -7,9 +7,14 @@ import 'package:meta/meta.dart';
 /// it expects for it.
 @immutable
 class DolEntry {
+  /// An entry asking for [length] bytes of [tag].
   const DolEntry({required this.tag, required this.length});
 
+  /// The EMV tag the card is asking for.
   final int tag;
+
+  /// How many bytes it expects, which is not always the tag's natural
+  /// size: a card may ask for a truncated value.
   final int length;
 
   @override
@@ -24,6 +29,8 @@ class DolEntry {
 /// goes on to authorize a payment.
 @immutable
 class TerminalProfile {
+  /// A profile describing the terminal by its [countryCode],
+  /// [currencyCode], [terminalType] and [transactionQualifiers].
   const TerminalProfile({
     this.countryCode = 0x0840,
     this.currencyCode = 0x0840,
@@ -43,6 +50,8 @@ class TerminalProfile {
   /// EMV tag `9F66`, Terminal Transaction Qualifiers.
   final List<int> transactionQualifiers;
 
+  /// The profile this package reads with: a US terminal that never goes
+  /// on to authorize anything.
   static const standard = TerminalProfile();
 }
 

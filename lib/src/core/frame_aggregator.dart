@@ -7,7 +7,16 @@ import 'card_frame_parser.dart';
 import 'card_scan_result.dart';
 
 /// A field the scanner can extract from a card.
-enum CardField { number, expiry, name }
+enum CardField {
+  /// The primary account number.
+  number,
+
+  /// The expiry date.
+  expiry,
+
+  /// The cardholder name.
+  name,
+}
 
 /// Controls which fields are needed and when a scan is considered complete.
 ///
@@ -21,6 +30,10 @@ enum CardField { number, expiry, name }
 ///   but never delays completion.
 @immutable
 class ScanRequirements {
+  /// Rules built from [required] and [preferred], the two timeouts
+  /// [preferredTimeout] and [preferredGrace], the per field vote counts
+  /// [panVotes], [expiryVotes] and [nameVotes], and the [windowSize] those
+  /// votes are counted over.
   const ScanRequirements({
     this.required = const {CardField.number, CardField.expiry},
     this.preferred = const {CardField.name},
@@ -60,7 +73,12 @@ class ScanRequirements {
 
   /// How many frames must agree on a value before it is accepted.
   final int panVotes;
+
+  /// How many frames must agree on the expiry date. Lower than the number:
+  /// four digits misread the same way twice are rarer.
   final int expiryVotes;
+
+  /// How many frames must agree on the cardholder name.
   final int nameVotes;
 
   /// Number of most recent frames considered when counting votes. A field
@@ -91,15 +109,34 @@ class ScanRequirements {
     nameVotes: 1,
   );
 
+  /// Tuned for the browser, where recognition manages about one frame a
+  /// second rather than eight.
+  ///
+  /// Fewer votes and a shorter window, because at that rate three agreeing
+  /// frames is three seconds of holding a card still and twelve frames of
+  /// history reaches back to a card that has since been turned over. The
+  /// long wait for the name is the same as [twoSided].
+  static const web = ScanRequirements(
+    panVotes: 2,
+    expiryVotes: 2,
+    nameVotes: 2,
+    windowSize: 8,
+    preferredTimeout: Duration(seconds: 15),
+  );
+
   /// For cards that print the name on the other side: long enough for the
   /// holder to notice the prompt, turn the card over and hold it still.
   static const twoSided = ScanRequirements(
     preferredTimeout: Duration(seconds: 15),
   );
 
+  /// Whether [field] has to be confirmed before the scan can complete.
+  /// The number always does, whatever [required] says.
   bool isRequired(CardField field) =>
       field == CardField.number || required.contains(field);
 
+  /// Whether [field] is worth waiting for but not worth blocking on. A
+  /// field that is required is never also preferred.
   bool isPreferred(CardField field) =>
       !isRequired(field) && preferred.contains(field);
 
@@ -127,6 +164,7 @@ class ScanRequirements {
   bool requiredSatisfied(Set<CardField> found) =>
       CardField.values.every((f) => !isRequired(f) || found.contains(f));
 
+  /// A copy of these rules with each given field replaced.
   ScanRequirements copyWith({
     Set<CardField>? required,
     Set<CardField>? preferred,
@@ -180,11 +218,13 @@ abstract interface class ScanSession {
 /// different number confirmed in its own right starts a new card. That is
 /// what lets a card with the name on the back be read in two passes.
 class FrameAggregator implements ScanSession {
+  /// An aggregator applying [requirements].
   FrameAggregator({this.requirements = ScanRequirements.standard})
     : _panVotes = _Votes<String>(requirements.windowSize),
       _expiryVotes = _Votes<String>(requirements.windowSize),
       _nameVotes = _Votes<String>(requirements.windowSize);
 
+  /// The rules this aggregator applies.
   final ScanRequirements requirements;
 
   /// A gap longer than this means frames stopped arriving rather than that

@@ -14,6 +14,8 @@ Scan a payment card with the camera and get its number, expiry date and cardhold
 
 Supported networks: **Visa**, **Mastercard**, **American Express**, **Discover**, **JCB**, **Diners Club**, **UnionPay**.
 
+Platforms: **iOS**, **Android** and **web**.
+
 ## Highlights
 
 - **One line integration.** `CardScannerPage.show(context)` opens a ready screen and returns a `CardScanResult`.
@@ -155,6 +157,40 @@ overlayBuilder: (context, state, cardRect) => Stack(
 ),
 ```
 
+## Your own preview
+
+`CardScannerView` gets the preview from the platform, so what a preview is can differ per platform: a texture on iOS and Android, an element on the web. If you draw your own camera UI around a bare controller, ask the controller for it:
+
+```dart
+final camera = controller.value.camera;
+if (camera != null)
+  ClipRect(
+    child: FittedBox(
+      fit: BoxFit.cover,
+      child: SizedBox(
+        width: camera.previewWidth.toDouble(),
+        height: camera.previewHeight.toDouble(),
+        child: controller.buildPreview(camera),
+      ),
+    ),
+  )
+```
+
+Keep that geometry. The region of interest is computed from the same numbers, so a preview laid out differently reads a different part of the frame than the one under your guide.
+
+## Frame size
+
+The frame is the largest ISO sized rectangle that fits every limit: `frameWidthFraction` of the view width (0.88), `frameHeightFraction` of its height (0.6), and `maxFrameWidth` logical pixels (440).
+
+The absolute limit is what a tablet needs. A fraction of the width is the wrong measure on a big screen: 88% of an iPad is wider than a card held at a comfortable distance, so the card has to be pressed against the lens to fill the frame. A card is about the same size in everyone's hand.
+
+```dart
+CardScannerView(
+  controller: controller,
+  maxFrameWidth: 520, // roomier frame on tablets
+)
+```
+
 ## Choosing which fields you need
 
 `ScanRequirements` controls when a scan is considered complete.
@@ -206,7 +242,7 @@ final controller = CardScannerController(session: MyOwnSession());
 
 ## Given and family name
 
-Cards print one line and never say where the surname starts, so a payment form that wants two fields has to guess. `CardholderName` guesses the usual way: the last word is the surname, anything before it is the given name, and a particle in front of the surname belongs to it.
+Cards print one line and never say where the surname starts, so a payment form that wants two fields has to guess. `CardholderName` guesses the usual way: the first word is always the given name, the last word is the surname, and a particle in front of the surname or a generational suffix after it belongs to it.
 
 ```dart
 final name = result.splitName;       // null when no name was recognized
@@ -214,7 +250,7 @@ name?.given;   // MARIA
 name?.family;  // DE LA CRUZ
 ```
 
-It handles middle names and initials ("WREN A. NGUYEN") and the particles da, das, de, del, della, den, der, di, do, dos, du, la, le, van and von. It will get some names wrong, so let people correct it.
+It handles middle names and initials ("WREN A. NGUYEN"), the suffixes JR, SR, II, III and IV ("JOHN SMITH JR" splits as JOHN and SMITH JR), and the particles da, das, de, del, della, den, der, di, do, dos, du, la, le, van and von. The first word is never taken as a particle, because DEL, LE and DU are given names as often as they are particles and a card always prints one. It will get some names wrong, so let people correct it.
 
 ## Text, prompts and failures
 
@@ -235,6 +271,95 @@ CardScannerPage.show(
 ```
 
 `CardScannerStrings` holds every string the scanner can show, with English defaults. `onOpenSettings` is a callback rather than a dependency, so this package does not pull a permissions plugin into your app; leave it out and no such button is offered. The close button is always reachable, including on the error screen.
+
+## The web
+
+The scanner runs in a browser too. Same frame, same voting, same parser;
+a different camera and a different OCR engine underneath.
+
+### Install the engine
+
+The browser has no system OCR, so the package brings its own: PaddleOCR
+PP-OCRv4 in a Web Worker. The models, the ONNX runtime's WebAssembly and
+OpenCV come to about 38 MB, which is why they are not package assets.
+Every iOS and Android build would carry them for nothing.
+
+Run this once per app, from the app's root:
+
+```bash
+dart run flutter_card_scanner_plus:install_web
+```
+
+It writes `web/flutter_card_scanner_plus/`, fetching each file from npm at
+a pinned version and checking it against a pinned hash. Add that folder to
+`.gitignore` and run the command in CI rather than committing 38 MB.
+
+### Set a Content-Security-Policy on the worker
+
+The worker sees pictures of cards. Serve `card_ocr_worker.js` with:
+
+```
+Content-Security-Policy: default-src 'none'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; connect-src 'self'
+```
+
+`connect-src 'self'` is the part that matters: it is what stops the worker
+from sending anything anywhere. `'unsafe-eval'` is unavoidable, because
+OpenCV's bindings generate code with `new Function`; without it OpenCV does
+not load at all.
+
+The package cannot set response headers, so this is your hosting's job.
+With Firebase Hosting, in `firebase.json`:
+
+```json
+{
+  "hosting": {
+    "headers": [
+      {
+        "source": "/flutter_card_scanner_plus/card_ocr_worker.js",
+        "headers": [
+          {
+            "key": "Content-Security-Policy",
+            "value": "default-src 'none'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; connect-src 'self'"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Verified in Chrome: a worker with that header cannot POST to another
+origin. How Safari applies a CSP to a worker has not been tested.
+
+### What differs in a browser
+
+| | Phone | Browser |
+|---|---|---|
+| Frames read | about 8 a second | about 1 a second |
+| First frame | immediate | 1 to 2 seconds, while 38 MB loads from cache |
+| Preset | `ScanRequirements.standard` | `ScanRequirements.web` |
+| Torch | if the device has one | only when the browser admits to one |
+
+Use the preset, which votes on fewer frames because fewer arrive:
+
+```dart
+CardScannerPage.show(context, requirements: ScanRequirements.web);
+```
+
+A page served over plain HTTP cannot open a camera at all. The scanner
+reports `unsupported` rather than pretending, because `getUserMedia` only
+exists in a secure context, which means HTTPS or localhost.
+
+### Names of three words or more
+
+The bundled model loses the spaces in a name of three or more words set in
+a tight proportional typeface: `TAYLOR ELLIS YOUNG` comes back as
+`TAYLORELLISYOUNG`. Two-word names and wider typefaces read correctly, and
+a glued name is rejected rather than returned wrong, so the field comes
+back `null` and the person types it.
+
+Enlarging the crop does not help. An English-only recognition model is the
+likely fix and is not in yet.
 
 
 ## NFC (optional)

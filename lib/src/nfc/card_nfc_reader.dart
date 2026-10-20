@@ -12,6 +12,8 @@ import 'track2.dart';
 /// One entry of the Application File Locator: which records to read.
 @immutable
 class AflEntry {
+  /// An entry covering records [firstRecord] to [lastRecord] of the file
+  /// numbered [sfi].
   const AflEntry({
     required this.sfi,
     required this.firstRecord,
@@ -20,7 +22,11 @@ class AflEntry {
 
   /// Short file identifier.
   final int sfi;
+
+  /// First record to read, counting from one.
   final int firstRecord;
+
+  /// Last record to read, inclusive.
   final int lastRecord;
 
   @override

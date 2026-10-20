@@ -70,6 +70,26 @@ void main() {
     expect(tight.top, greaterThan(padded.top));
   });
 
+  testWidgets('a tablet reads the capped frame, not the whole screen', (
+    tester,
+  ) async {
+    const camera = CameraHandle(
+      textureId: 1,
+      previewWidth: 1080,
+      previewHeight: 1920,
+    );
+    final roi = await regionFor(tester, const Size(810, 1080), camera: camera);
+
+    // The frame is 440 logical pixels of an 810 wide screen, so the region
+    // is well short of the preview's full width.
+    expect(roi.width, lessThan(0.75));
+    expect(
+      (roi.width * camera.previewWidth) / (roi.height * camera.previewHeight),
+      closeTo(cardAspect, 0.01),
+    );
+    expect(roi.centerX, closeTo(0.5, 0.01));
+  });
+
   testWidgets('the region still fits the frame in landscape', (tester) async {
     const landscapeCamera = CameraHandle(
       textureId: 1,

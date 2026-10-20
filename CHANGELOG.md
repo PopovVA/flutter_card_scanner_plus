@@ -1,3 +1,82 @@
+## Unreleased
+
+### Web
+
+- The scanner runs in a browser. Camera through `getUserMedia`, preview as
+  a `<video>` element behind a platform view, recognition by PaddleOCR
+  PP-OCRv4 in a Web Worker. The Dart core, the frame, the voting and the
+  parser are the same ones the phones use.
+- `dart run flutter_card_scanner_plus:install_web` puts the engine in an
+  app's `web/` folder: about 38 MB of OpenCV, ONNX runtime WebAssembly and
+  models, fetched from npm at pinned versions and checked against pinned
+  hashes. They are deliberately not package assets, which would add 38 MB
+  to every iOS and Android build.
+- `ScanRequirements.web` votes on fewer frames, because a browser manages
+  about one a second rather than eight.
+- `CameraHandle.torchAvailable` says whether the camera has a torch worth
+  offering. Several browsers report one they cannot light, so the web
+  implementation asks the track and says no when it is not sure, and
+  `CardScannerPage` hides the button rather than disabling it.
+- Three failed frames in a row report `ocrUnavailable` and replace the
+  worker, instead of a scan that can never finish. A frame has 20 seconds
+  and the engine has two minutes to load.
+- An open camera that arrives after the scanner was closed closes itself.
+  A browser permission prompt can sit on screen for minutes, and the camera
+  stayed on when the answer came too late.
+- `README.md` carries the Content-Security-Policy the worker needs and what
+  it is for.
+
+### Breaking
+
+- `CardScannerPlatform` gained `buildPreview`. Anything implementing that
+  interface, which is only needed to fake the platform in tests, has to
+  provide it.
+
+### Preview
+
+- The preview widget comes from the platform rather than from the view, so
+  a platform without a texture can supply its own. iOS and Android are
+  unchanged: they still return a `RotatedBox` around a `Texture`.
+- `CardScannerController.buildPreview` exposes it for an app drawing its own
+  preview around the controller. The view keeps the geometry around it, the
+  `ClipRect` and the `BoxFit.cover` scaling, because the region of interest
+  is computed from that same geometry.
+
+### Recognition
+
+- A card word that is also a common name keeps its place in one. `BLACK`,
+  `BLUE`, `CASH`, `CHASE`, `CHIP`, `GOLD`, `GOOD`, `GREEN`, `MASTER`,
+  `SAPPHIRE`, `SILVER`, `WELLS` and `WISE` are in the new
+  `NameParser.nameLikeStopWords`, and are read as part of a name when the
+  same line carries a word that can only be a name. "ALICE GREEN" and
+  "JOHN A BLACK" were being cut down to "ALICE" and "JOHN A"; "VISA GOLD"
+  and "CHASE SAPPHIRE" are still card art.
+
+### Splitting a name
+
+- The first word of a printed name is always the given name.
+  `CardholderName.split('DEL SMITH')` gave no given name and the surname
+  "DEL SMITH", because DEL is also a particle. So were LE and DU, which are
+  given names at least as often.
+- A generational suffix stays with the surname.
+  `split('JOHN SMITH JR')` gave the surname "JR". `CardholderName.suffixes`
+  holds JR, SR, II, III and IV, and punctuation is ignored.
+- `split('DE LA CRUZ')` now gives "DE" and "LA CRUZ" rather than no given
+  name at all, which follows from the rule above.
+
+### Frame
+
+- `CardScannerView.maxFrameWidth` caps the frame at 440 logical pixels,
+  whatever the fractions allow. On an 810 by 1080 tablet the frame was 713
+  by 450, and in landscape 950 by 599, so a card had to be held against the
+  lens to fill it. Phones are unaffected: 88% of a 390 point screen is
+  already narrower than the limit.
+
+### Documentation
+
+- Every public declaration carries its own dartdoc, and
+  `public_member_api_docs` is enabled so it stays that way.
+
 ## 0.2.0
 
 ### Breaking

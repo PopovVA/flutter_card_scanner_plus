@@ -9,16 +9,24 @@ import 'tlv.dart';
 /// One command and its reply, kept for diagnostics.
 @immutable
 class NfcExchange {
+  /// One exchange named [label], where [command] was sent and [response]
+  /// came back.
   const NfcExchange({
     required this.label,
     required this.command,
     required this.response,
   });
 
+  /// What the step was for, such as "SELECT PPSE".
   final String label;
+
+  /// The command as hex.
   final String command;
+
+  /// What the card answered.
   final ResponseApdu response;
 
+  /// The status word as four hex digits, which is how EMV documents them.
   String get statusWord =>
       response.statusWord.toRadixString(16).toUpperCase().padLeft(4, '0');
 
@@ -29,6 +37,8 @@ class NfcExchange {
 /// Result of [CardNfcProbe.run].
 @immutable
 class NfcProbeReport {
+  /// A report of the [exchanges] that took place, the [offeredAids] the
+  /// card listed, the [selectedAid] that answered, and any [error].
   const NfcProbeReport({
     required this.exchanges,
     required this.offeredAids,
@@ -45,6 +55,7 @@ class NfcProbeReport {
   /// The AID that was selected successfully, as hex, or `null`.
   final String? selectedAid;
 
+  /// Why the probe stopped early, if it did.
   final CardNfcException? error;
 
   /// The card answered PPSE and a payment application was selected.

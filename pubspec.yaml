@@ -21,6 +21,9 @@ dependencies:
   flutter:
     sdk: flutter
   meta: ^1.16.0
+  # Browser bindings for the web implementation. Unused on every other
+  # platform, and small enough not to matter there.
+  web: ^1.1.0
 
 dev_dependencies:
   flutter_test:
@@ -49,3 +52,6 @@ flutter:
         pluginClass: FlutterCardScannerPlusPlugin
       ios:
         pluginClass: FlutterCardScannerPlusPlugin
+      web:
+        pluginClass: CardScannerPlusWeb
+        fileName: src/web/card_scanner_web.dart

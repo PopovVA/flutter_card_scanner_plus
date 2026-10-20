@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_card_scanner_plus/flutter_card_scanner_plus.dart';
 import 'package:image_picker/image_picker.dart';
@@ -121,7 +122,13 @@ class _HomePageState extends State<HomePage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             FilledButton.icon(
-              onPressed: () => _scan(requirements: ScanRequirements.standard),
+              // A browser reads about one frame a second rather than
+              // eight, so it votes on fewer of them.
+              onPressed: () => _scan(
+                requirements: kIsWeb
+                    ? ScanRequirements.web
+                    : ScanRequirements.standard,
+              ),
               icon: const Icon(Icons.credit_card),
               label: const Text('Scan (number + expiry, name if quick)'),
             ),

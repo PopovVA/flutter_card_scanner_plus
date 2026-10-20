@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 
 import '../channel/card_scanner_platform.dart';
 import '../core/card_frame_parser.dart';
@@ -11,6 +11,9 @@ import '../core/recognized_text.dart';
 /// Snapshot of the scanner, exposed through [CardScannerController.value].
 @immutable
 class CardScannerState {
+  /// A snapshot holding the [camera], the flags [isRunning] and
+  /// [torchEnabled], the aggregated [result] and the [lastFrame] behind it,
+  /// the fields still [confirming], and any [error].
   const CardScannerState({
     this.camera,
     this.isRunning = false,
@@ -21,11 +24,16 @@ class CardScannerState {
     this.error,
   });
 
+  /// Before the camera has been started.
   static const initial = CardScannerState();
 
   /// Preview texture, available while [isRunning].
   final CameraHandle? camera;
+
+  /// Whether the camera is open and delivering frames.
   final bool isRunning;
+
+  /// Whether the torch is lit.
   final bool torchEnabled;
 
   /// Aggregated result so far. Check [CardScanResult.isComplete].
@@ -41,8 +49,13 @@ class CardScannerState {
   /// Set when the camera could not be started.
   final CardScannerException? error;
 
+  /// Whether [result] satisfies the scan requirements.
   bool get isComplete => result.isComplete;
 
+  /// A copy of this state with each given field replaced.
+  ///
+  /// `null` leaves a field alone, so [clearCamera] and [clearError] are
+  /// what remove the two that can be removed.
   CardScannerState copyWith({
     CameraHandle? camera,
     bool clearCamera = false,
@@ -69,6 +82,11 @@ class CardScannerState {
 /// Listen to [value] (it's a [ValueNotifier]) or to [results]. For a
 /// one-shot flow use [scanOnce].
 class CardScannerController extends ValueNotifier<CardScannerState> {
+  /// A controller applying [requirements], or driving [session] when one
+  /// is given, and stopping the camera on completion unless
+  /// [stopWhenComplete] says otherwise.
+  ///
+  /// [platform] replaces the platform channel in tests.
   CardScannerController({
     this.requirements = ScanRequirements.standard,
     this.stopWhenComplete = true,
@@ -189,6 +207,12 @@ class CardScannerController extends ValueNotifier<CardScannerState> {
     );
   }
 
+  /// Builds the preview for [handle], whatever this platform uses for one.
+  ///
+  /// [CardScannerView] calls this; an app only needs it when drawing its
+  /// own preview around the controller.
+  Widget buildPreview(CameraHandle handle) => _platform.buildPreview(handle);
+
   /// Clears the accumulated result so a new card can be scanned.
   void reset() {
     _session.reset();
@@ -199,12 +223,15 @@ class CardScannerController extends ValueNotifier<CardScannerState> {
     );
   }
 
+  /// Turns the torch on when [enabled], off otherwise. Does nothing while
+  /// the camera is stopped.
   Future<void> setTorch(bool enabled) async {
     if (!value.isRunning) return;
     await _platform.setTorch(enabled);
     value = value.copyWith(torchEnabled: enabled);
   }
 
+  /// Turns the torch on if it is off, and off if it is on.
   Future<void> toggleTorch() => setTorch(!value.torchEnabled);
 
   /// Limits OCR to [box] (normalized preview coordinates). The view sets

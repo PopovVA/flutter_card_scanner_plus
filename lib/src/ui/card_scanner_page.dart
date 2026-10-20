@@ -16,6 +16,10 @@ import 'card_scanner_view.dart';
 /// final card = await CardScannerPage.show(context);
 /// ```
 class CardScannerPage extends StatefulWidget {
+  /// A scanner page applying [requirements], titled [title], drawing
+  /// [overlayBuilder] over the preview, with controls in
+  /// [foregroundColor], text from [strings], an [onOpenSettings] hook and
+  /// haptics when [enableHaptics] is set.
   const CardScannerPage({
     super.key,
     this.requirements = ScanRequirements.standard,
@@ -27,8 +31,13 @@ class CardScannerPage extends StatefulWidget {
     this.enableHaptics = false,
   });
 
+  /// Which fields the scan waits for.
   final ScanRequirements requirements;
+
+  /// Shown in the app bar. No title at all when `null`.
   final String? title;
+
+  /// Draws the UI over the preview. Defaults to [CardFrameOverlay].
   final CardScannerOverlayBuilder? overlayBuilder;
 
   /// Color of the close button, torch toggle and title.
@@ -52,6 +61,8 @@ class CardScannerPage extends StatefulWidget {
   /// Play one light haptic each time the prompt changes.
   final bool enableHaptics;
 
+  /// Pushes a scanner page and completes with the card, or with `null` if
+  /// it was dismissed. Takes the same arguments as the constructor.
   static Future<CardScanResult?> show(
     BuildContext context, {
     ScanRequirements requirements = ScanRequirements.standard,
@@ -152,12 +163,21 @@ class _CardScannerPageState extends State<CardScannerPage> {
         actions: [
           ValueListenableBuilder<CardScannerState>(
             valueListenable: _controller,
-            builder: (context, state, _) => IconButton(
-              color: fg,
-              disabledColor: fg.withValues(alpha: 0.4),
-              icon: Icon(state.torchEnabled ? Icons.flash_on : Icons.flash_off),
-              onPressed: state.isRunning ? _controller.toggleTorch : null,
-            ),
+            builder: (context, state, _) {
+              // A camera without a torch gets no button at all: a disabled
+              // one invites tapping and explains nothing.
+              if (state.camera?.torchAvailable == false) {
+                return const SizedBox.shrink();
+              }
+              return IconButton(
+                color: fg,
+                disabledColor: fg.withValues(alpha: 0.4),
+                icon: Icon(
+                  state.torchEnabled ? Icons.flash_on : Icons.flash_off,
+                ),
+                onPressed: state.isRunning ? _controller.toggleTorch : null,
+              );
+            },
           ),
         ],
       ),

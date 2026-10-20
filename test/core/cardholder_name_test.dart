@@ -26,8 +26,24 @@ void main() {
     expectSplit('PAOLO DELLA ROVERE', 'PAOLO', 'DELLA ROVERE');
   });
 
-  test('a surname that is only particles and a word', () {
-    expectSplit('DE LA CRUZ', '', 'DE LA CRUZ');
+  test('the first word is a given name even when it reads as a particle', () {
+    // A card always prints a given name, and DEL, LE and DU are given
+    // names as often as they are particles.
+    expectSplit('DEL SMITH', 'DEL', 'SMITH');
+    expectSplit('LE NGUYEN', 'LE', 'NGUYEN');
+    expectSplit('DU VAN DER BERG', 'DU', 'VAN DER BERG');
+    expectSplit('DE LA CRUZ', 'DE', 'LA CRUZ');
+  });
+
+  test('a generational suffix stays with the surname', () {
+    expectSplit('JOHN SMITH JR', 'JOHN', 'SMITH JR');
+    expectSplit('JOHN SMITH JR.', 'JOHN', 'SMITH JR.');
+    expectSplit('ROBERT DOWNEY III', 'ROBERT', 'DOWNEY III');
+    expectSplit('JOSE DE LA CRUZ SR', 'JOSE', 'DE LA CRUZ SR');
+  });
+
+  test('a suffix is not taken when nothing would be left in front of it', () {
+    expectSplit('ADA II', 'ADA', 'II');
   });
 
   test('a hyphenated surname is one word', () {

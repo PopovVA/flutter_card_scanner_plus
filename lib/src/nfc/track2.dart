@@ -6,6 +6,8 @@ import '../core/luhn.dart';
 /// Card data recovered from an EMV record.
 @immutable
 class Track2Data {
+  /// A card of [brand] numbered [pan], expiring in [expiryMonth] of
+  /// [expiryYear] when the record carried a date.
   const Track2Data({
     required this.pan,
     required this.brand,
@@ -15,6 +17,8 @@ class Track2Data {
 
   /// Digits only.
   final String pan;
+
+  /// The network the leading digits belong to.
   final CardBrand brand;
 
   /// `1..12`, or `null` when the record carried no date.
@@ -23,6 +27,7 @@ class Track2Data {
   /// Four digit year, or `null`.
   final int? expiryYear;
 
+  /// Whether a complete expiry date was recovered.
   bool get hasExpiry => expiryMonth != null && expiryYear != null;
 
   @override

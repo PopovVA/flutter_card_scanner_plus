@@ -4,11 +4,16 @@ import 'package:meta/meta.dart';
 /// Error raised by the native NFC layer.
 @immutable
 class CardNfcException implements Exception {
+  /// An error identified by [code], with an optional [message] from the
+  /// platform.
   const CardNfcException(this.code, [this.message]);
 
   /// One of [unavailable], [cancelled], [tagLost], [sessionError], or a
   /// platform specific code.
   final String code;
+
+  /// What the platform said about it. Useful in a log, too specific for a
+  /// user.
   final String? message;
 
   /// The device has no NFC, it is switched off, or the app lacks the
@@ -21,9 +26,15 @@ class CardNfcException implements Exception {
   /// The card was moved away mid conversation.
   static const tagLost = 'nfcTagLost';
 
+  /// The session failed for a reason the platform did not make specific.
   static const sessionError = 'nfcSessionError';
 
+  /// Whether the read was called off rather than failed, which deserves no
+  /// error message.
   bool get isCancelled => code == cancelled;
+
+  /// Whether this device cannot read cards at all, which is worth saying
+  /// before offering the option.
   bool get isUnavailable => code == unavailable;
 
   @override
@@ -36,6 +47,7 @@ class CardNfcException implements Exception {
 /// Everything above this (EMV flow, TLV, parsing) is plain Dart, so it can
 /// be tested without a device by swapping [instance].
 abstract class CardNfcPlatform {
+  /// The implementation the package uses. Assign a fake in tests.
   static CardNfcPlatform instance = MethodChannelCardNfcPlatform();
 
   /// Whether this device can read contactless cards right now.
@@ -58,6 +70,8 @@ abstract class CardNfcPlatform {
 
 /// Default implementation talking to the plugin over a method channel.
 class MethodChannelCardNfcPlatform implements CardNfcPlatform {
+  /// Talks to the plugin over the package's own channel, or over
+  /// [channel] when a test supplies one.
   MethodChannelCardNfcPlatform({@visibleForTesting MethodChannel? channel})
     : _channel =
           channel ?? const MethodChannel('flutter_card_scanner_plus/nfc');

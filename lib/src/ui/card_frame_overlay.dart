@@ -13,6 +13,13 @@ import 'card_scanner_strings.dart';
 ///
 /// Reusable inside a custom `overlayBuilder` as well.
 class CardFrameOverlay extends StatefulWidget {
+  /// An overlay drawing [cardRect] over the preview and reporting [state].
+  ///
+  /// [requirements] decides which prompt is shown, [strings] supplies the
+  /// text, [scrimColor], [frameColor], [successColor], [cornerRadius] and
+  /// [strokeWidth] its looks, [showFields] whether recognized values are
+  /// printed, [hint] replaces the chosen prompt, and [enableHaptics] taps
+  /// once per prompt.
   const CardFrameOverlay({
     super.key,
     required this.state,
@@ -29,18 +36,32 @@ class CardFrameOverlay extends StatefulWidget {
     this.enableHaptics = false,
   });
 
+  /// What the scanner has found so far.
   final CardScannerState state;
+
+  /// Where the card frame sits, in this widget's coordinates.
   final Rect cardRect;
 
   /// What the scan is waiting for, which decides the prompt. A scanner that
   /// does not want the name must not ask for the card to be turned over.
   final ScanRequirements requirements;
 
+  /// Text for the prompt under the frame.
   final CardScannerStrings strings;
+
+  /// Fill drawn over everything outside the frame.
   final Color scrimColor;
+
+  /// Colour of the corner brackets before anything is recognized.
   final Color frameColor;
+
+  /// Colour the brackets move towards as fields are confirmed.
   final Color successColor;
+
+  /// Corner radius of the frame, in logical pixels.
   final double cornerRadius;
+
+  /// Thickness of the corner brackets, in logical pixels.
   final double strokeWidth;
 
   /// Print recognized number / expiry / name below the frame.

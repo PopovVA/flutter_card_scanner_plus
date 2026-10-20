@@ -8,14 +8,22 @@ import 'recognized_text.dart';
 /// Everything extracted from a single OCR frame. Any field may be `null`.
 @immutable
 class FrameParseResult {
+  /// A frame holding whichever of [pan], [expiry] and [name] was found.
   const FrameParseResult({this.pan, this.expiry, this.name});
 
+  /// A frame in which nothing was found.
   static const empty = FrameParseResult();
 
+  /// The card number, if one passed every check in this frame.
   final PanCandidate? pan;
+
+  /// The expiry date, if one was found and is not in the past.
   final ExpiryCandidate? expiry;
+
+  /// The best cardholder name candidate in this frame.
   final NameCandidate? name;
 
+  /// Whether this frame yielded nothing at all.
   bool get isEmpty => pan == null && expiry == null && name == null;
 
   @override
@@ -33,6 +41,10 @@ abstract final class CardFrameParser {
   /// less than this fraction of the shorter line's height.
   static const _rowTolerance = 0.6;
 
+  /// Reads the fields printed on the card out of [frame].
+  ///
+  /// [now] is the date an expiry is judged against, so a test can pin it;
+  /// it defaults to the current date.
   static FrameParseResult parse(RecognizedFrame frame, {DateTime? now}) {
     if (frame.lines.isEmpty) return FrameParseResult.empty;
 

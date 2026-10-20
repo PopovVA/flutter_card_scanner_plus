@@ -132,6 +132,29 @@ void main() {
     expect(find.text(_strings.alignCard), findsOne);
   });
 
+  group('the torch button', () {
+    testWidgets('is offered when the camera has one', (tester) async {
+      await openPage(tester);
+      expect(find.byIcon(Icons.flash_off), findsOne);
+    });
+
+    testWidgets('is absent when the camera has none', (tester) async {
+      fake = FakeScannerPlatform(
+        const CameraHandle(
+          textureId: 1,
+          previewWidth: 1080,
+          previewHeight: 1920,
+          torchAvailable: false,
+        ),
+      );
+      CardScannerPlatform.instance = fake;
+      await openPage(tester);
+
+      expect(find.byIcon(Icons.flash_off), findsNothing);
+      expect(find.byIcon(Icons.flash_on), findsNothing);
+    });
+  });
+
   testWidgets('closing takes the preview down before the route leaves', (
     tester,
   ) async {
