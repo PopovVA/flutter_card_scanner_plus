@@ -8,6 +8,7 @@ import 'recognized_text.dart';
 /// A primary account number found in OCR output.
 @immutable
 class PanCandidate {
+  /// A [number] of [brand], read from [box] with the given [confidence].
   const PanCandidate({
     required this.number,
     required this.brand,
@@ -17,6 +18,8 @@ class PanCandidate {
 
   /// Digits only, e.g. `4111111111111111`.
   final String number;
+
+  /// The network the leading digits belong to.
   final CardBrand brand;
 
   /// Location of the text this number was extracted from.

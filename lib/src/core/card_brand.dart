@@ -5,12 +5,25 @@
 /// pass the Luhn check, so cards issued outside the checksum (a few
 /// 19-digit UnionPay ranges) are not detected.
 enum CardBrand {
+  /// Numbers starting with 4.
   visa,
+
+  /// 51-55 and the 2221-2720 range.
   mastercard,
+
+  /// American Express: 34 and 37, fifteen digits.
   amex,
+
+  /// 6011, 644-649 and 65.
   discover,
+
+  /// 3528-3589.
   jcb,
+
+  /// Diners Club: 300-305, 3095, 36, 38 and 39.
   diners,
+
+  /// 62 and 81, including the range Discover also accepts.
   unionpay;
 
   /// Human-readable brand name.

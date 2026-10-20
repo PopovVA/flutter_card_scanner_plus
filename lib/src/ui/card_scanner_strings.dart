@@ -18,6 +18,10 @@ import '../core/card_scan_result.dart';
 /// ```
 @immutable
 class CardScannerStrings {
+  /// Text for every state the scanner can be in: [alignCard],
+  /// [lookingForExpiry], [lookingForName] and [lookingForNumber] while
+  /// scanning, then [permissionDenied], [cameraFailed] and [cameraBusy]
+  /// when it fails, with [retry] and [openSettings] on the buttons.
   const CardScannerStrings({
     this.alignCard = 'Align the card inside the frame',
     this.lookingForExpiry = 'Number recognized. Looking for the expiry date',
@@ -64,6 +68,7 @@ class CardScannerStrings {
   /// Button that tries the camera again.
   final String retry;
 
+  /// The English defaults.
   static const defaults = CardScannerStrings();
 
   /// The prompt that matches what has been recognized so far.
@@ -79,6 +84,7 @@ class CardScannerStrings {
     return alignCard;
   }
 
+  /// A copy of these strings with each given one replaced.
   CardScannerStrings copyWith({
     String? alignCard,
     String? lookingForExpiry,

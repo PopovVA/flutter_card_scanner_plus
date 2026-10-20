@@ -154,6 +154,19 @@ overlayBuilder: (context, state, cardRect) => Stack(
 ),
 ```
 
+## Frame size
+
+The frame is the largest ISO sized rectangle that fits every limit: `frameWidthFraction` of the view width (0.88), `frameHeightFraction` of its height (0.6), and `maxFrameWidth` logical pixels (440).
+
+The absolute limit is what a tablet needs. A fraction of the width is the wrong measure on a big screen: 88% of an iPad is wider than a card held at a comfortable distance, so the card has to be pressed against the lens to fill the frame. A card is about the same size in everyone's hand.
+
+```dart
+CardScannerView(
+  controller: controller,
+  maxFrameWidth: 520, // roomier frame on tablets
+)
+```
+
 ## Choosing which fields you need
 
 `ScanRequirements` controls when a scan is considered complete.
@@ -205,7 +218,7 @@ final controller = CardScannerController(session: MyOwnSession());
 
 ## Given and family name
 
-Cards print one line and never say where the surname starts, so a payment form that wants two fields has to guess. `CardholderName` guesses the usual way: the last word is the surname, anything before it is the given name, and a particle in front of the surname belongs to it.
+Cards print one line and never say where the surname starts, so a payment form that wants two fields has to guess. `CardholderName` guesses the usual way: the first word is always the given name, the last word is the surname, and a particle in front of the surname or a generational suffix after it belongs to it.
 
 ```dart
 final name = result.splitName;       // null when no name was recognized
@@ -213,7 +226,7 @@ name?.given;   // MARIA
 name?.family;  // DE LA CRUZ
 ```
 
-It handles middle names and initials ("WREN A. NGUYEN") and the particles da, das, de, del, della, den, der, di, do, dos, du, la, le, van and von. It will get some names wrong, so let people correct it.
+It handles middle names and initials ("WREN A. NGUYEN"), the suffixes JR, SR, II, III and IV ("JOHN SMITH JR" splits as JOHN and SMITH JR), and the particles da, das, de, del, della, den, der, di, do, dos, du, la, le, van and von. The first word is never taken as a particle, because DEL, LE and DU are given names as often as they are particles and a card always prints one. It will get some names wrong, so let people correct it.
 
 ## Text, prompts and failures
 

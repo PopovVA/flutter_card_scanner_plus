@@ -6,6 +6,8 @@ import 'recognized_text.dart';
 /// An expiry date found in OCR output.
 @immutable
 class ExpiryCandidate implements Comparable<ExpiryCandidate> {
+  /// A date of [month] and [year], read from [box] with the engine's
+  /// [confidence].
   const ExpiryCandidate({
     required this.month,
     required this.year,
@@ -18,7 +20,12 @@ class ExpiryCandidate implements Comparable<ExpiryCandidate> {
 
   /// Four-digit year.
   final int year;
+
+  /// Where the date was printed, which is what tells the name parser how
+  /// far down the card it is looking.
   final TextBox box;
+
+  /// `0..1`, the engine's confidence in the line this came from.
   final double confidence;
 
   /// `MM/YY` as printed on the card.
