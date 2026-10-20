@@ -255,13 +255,13 @@ class _CardScannerViewState extends State<CardScannerView>
                   ClipRect(
                     child: FittedBox(
                       fit: BoxFit.cover,
+                      // Sized in the camera's own pixels and scaled from
+                      // there, which is the geometry the region of interest
+                      // is computed from as well.
                       child: SizedBox(
                         width: camera.previewWidth.toDouble(),
                         height: camera.previewHeight.toDouble(),
-                        child: RotatedBox(
-                          quarterTurns: camera.quarterTurns,
-                          child: Texture(textureId: camera.textureId),
-                        ),
+                        child: widget.controller.buildPreview(camera),
                       ),
                     ),
                   ),

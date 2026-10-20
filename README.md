@@ -154,6 +154,27 @@ overlayBuilder: (context, state, cardRect) => Stack(
 ),
 ```
 
+## Your own preview
+
+`CardScannerView` gets the preview from the platform, so what a preview is can differ per platform: a texture on iOS and Android, an element on the web. If you draw your own camera UI around a bare controller, ask the controller for it:
+
+```dart
+final camera = controller.value.camera;
+if (camera != null)
+  ClipRect(
+    child: FittedBox(
+      fit: BoxFit.cover,
+      child: SizedBox(
+        width: camera.previewWidth.toDouble(),
+        height: camera.previewHeight.toDouble(),
+        child: controller.buildPreview(camera),
+      ),
+    ),
+  )
+```
+
+Keep that geometry. The region of interest is computed from the same numbers, so a preview laid out differently reads a different part of the frame than the one under your guide.
+
 ## Frame size
 
 The frame is the largest ISO sized rectangle that fits every limit: `frameWidthFraction` of the view width (0.88), `frameHeightFraction` of its height (0.6), and `maxFrameWidth` logical pixels (440).
