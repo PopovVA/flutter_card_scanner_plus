@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 
 import '../channel/card_scanner_platform.dart';
 import '../core/card_frame_parser.dart';
@@ -206,6 +206,12 @@ class CardScannerController extends ValueNotifier<CardScannerState> {
       clearCamera: true,
     );
   }
+
+  /// Builds the preview for [handle], whatever this platform uses for one.
+  ///
+  /// [CardScannerView] calls this; an app only needs it when drawing its
+  /// own preview around the controller.
+  Widget buildPreview(CameraHandle handle) => _platform.buildPreview(handle);
 
   /// Clears the accumulated result so a new card can be scanned.
   void reset() {

@@ -1,5 +1,21 @@
 ## Unreleased
 
+### Breaking
+
+- `CardScannerPlatform` gained `buildPreview`. Anything implementing that
+  interface, which is only needed to fake the platform in tests, has to
+  provide it.
+
+### Preview
+
+- The preview widget comes from the platform rather than from the view, so
+  a platform without a texture can supply its own. iOS and Android are
+  unchanged: they still return a `RotatedBox` around a `Texture`.
+- `CardScannerController.buildPreview` exposes it for an app drawing its own
+  preview around the controller. The view keeps the geometry around it, the
+  `ClipRect` and the `BoxFit.cover` scaling, because the region of interest
+  is computed from that same geometry.
+
 ### Recognition
 
 - A card word that is also a common name keeps its place in one. `BLACK`,

@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/services.dart';
-import 'package:meta/meta.dart';
+import 'package:flutter/widgets.dart';
 
 import '../core/recognized_text.dart';
 
@@ -145,6 +145,20 @@ abstract class CardScannerPlatform {
   /// is no longer running once one of these arrives.
   Stream<CardScannerException> get errors;
 
+  /// Builds the widget that shows what the camera sees.
+  ///
+  /// [handle] is the one [start] returned, or the latest from
+  /// [previewUpdates]. The widget is laid out at the handle's own pixel
+  /// size and scaled by the caller, so it must fill whatever box it is
+  /// given and must not crop: the region of interest is computed from that
+  /// same geometry, and a preview that trimmed its own edges would read a
+  /// different part of the frame than the one under the guide.
+  ///
+  /// It exists because platforms disagree about what a camera preview is.
+  /// A texture serves on iOS and Android; the web has no texture and hands
+  /// over an element instead.
+  Widget buildPreview(CameraHandle handle);
+
   /// Runs OCR once on an encoded image (JPEG, PNG, HEIC…).
   ///
   /// Independent of the camera; may be called while it is running or not.
@@ -241,6 +255,12 @@ class MethodChannelCardScannerPlatform implements CardScannerPlatform {
         (event) =>
             CameraHandle.fromMap(event['preview']! as Map<Object?, Object?>),
       );
+
+  @override
+  Widget buildPreview(CameraHandle handle) => RotatedBox(
+    quarterTurns: handle.quarterTurns,
+    child: Texture(textureId: handle.textureId),
+  );
 
   @override
   Stream<CardScannerException> get errors =>
