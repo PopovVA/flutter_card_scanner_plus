@@ -11,7 +11,13 @@ const log = (m) => { out.textContent += '\n' + m; console.log('[harness] ' + m);
 // A synthetic card: the layout a real one has, drawn with a plain font.
 function drawCard() {
   const c = document.getElementById('card');
+  // ?w= draws the same card smaller, which is what the scanner sends when
+  // a card is held further from the lens.
+  const width = Number(new URLSearchParams(location.search).get('w') || 960);
+  c.width = width;
+  c.height = Math.round(width * 600 / 960);
   const g = c.getContext('2d');
+  g.setTransform(width / 960, 0, 0, width / 960, 0, 0);
   g.fillStyle = '#1b3a5c'; g.fillRect(0, 0, c.width, c.height);
   g.fillStyle = '#ffffff';
   g.font = 'bold 72px "Courier New", monospace';

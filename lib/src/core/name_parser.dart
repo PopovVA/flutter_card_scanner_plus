@@ -215,6 +215,7 @@ abstract final class NameParser {
     if (!looksLikeName(text)) return null;
 
     final box = kept.map((w) => w.box).reduce((a, b) => a.union(b));
+    if (_isIssuerArea(box, panBox)) return null;
     final confidence =
         kept.map((w) => w.confidence).reduce((a, b) => a + b) / kept.length;
     return NameCandidate(
@@ -223,6 +224,23 @@ abstract final class NameParser {
       confidence: confidence,
       score: _score(text, box, panBox, expiryBox),
     );
+  }
+
+  /// Whether [box] sits in the band above the number where the issuer
+  /// prints its own name.
+  ///
+  /// A holder name is printed beside the number or below it; some cards
+  /// put it just above. Nothing puts it at the top of the card, which is
+  /// where the bank's name goes. Reading that as the holder is worse than
+  /// reading no holder at all: a scan that comes back without a name asks
+  /// the person to type one, while a scan that comes back with the bank's
+  /// name asks them to notice.
+  ///
+  /// It costs nothing when the number is unknown, since there is then no
+  /// band to speak of.
+  static bool _isIssuerArea(TextBox box, TextBox? panBox) {
+    if (panBox == null || panBox.height <= 0) return false;
+    return box.bottom < panBox.top - panBox.height * 2;
   }
 
   /// Whether [word] can never be part of a printed name: a known card word,
@@ -262,9 +280,9 @@ abstract final class NameParser {
       if (box.top >= panBox.bottom) {
         score += box.top - panBox.bottom <= panBox.height * 4 ? 2 : -1;
       } else if (box.bottom <= panBox.top) {
-        // Some cards print the name above the number. Further up is the
-        // issuer name, not the holder.
-        score += panBox.top - box.bottom <= panBox.height * 2 ? 1 : -2;
+        // Some cards print the name just above the number. Further up is
+        // the issuer, and that is refused outright rather than scored.
+        score += 1;
       }
     }
 

@@ -118,7 +118,7 @@ void main() {
       expect(r.name?.name, 'ADA LOVELACE');
     });
 
-    test('the only candidate is still returned, however it scores', () {
+    test('the bank at the top of the card is never the holder', () {
       final frame = RecognizedFrame(
         lines: [
           line('ZEBRA MONEY', 0.05, 0.05),
@@ -126,7 +126,26 @@ void main() {
         ],
       );
       final r = CardFrameParser.parse(frame, now: now);
-      expect(r.name?.name, 'ZEBRA MONEY');
+
+      // Even as the only candidate. No name asks the person to type one;
+      // the bank's name asks them to notice it is wrong.
+      expect(r.name, isNull);
+      expect(r.pan?.number, '4111111111111111');
+    });
+
+    test('a name printed just above the number still counts', () {
+      final frame = RecognizedFrame(
+        lines: [
+          line('ADA LOVELACE', 0.05, 0.36),
+          line('4111 1111 1111 1111', 0.05, 0.45, w: 0.8, h: 0.1),
+        ],
+      );
+      expect(CardFrameParser.parse(frame, now: now).name?.name, 'ADA LOVELACE');
+    });
+
+    test('with no number there is no band, so nothing is refused', () {
+      final frame = RecognizedFrame(lines: [line('ADA LOVELACE', 0.05, 0.05)]);
+      expect(CardFrameParser.parse(frame, now: now).name?.name, 'ADA LOVELACE');
     });
   });
 }

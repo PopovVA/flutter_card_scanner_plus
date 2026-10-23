@@ -58,9 +58,11 @@ flutter build web --release
 #   npx http-server build/web -S -C cert.pem -K key.pem -p 8443
 ```
 
-Before any of this, `example/web/ocr_harness.html` tells you in five
-seconds whether the engine itself still works, with no camera involved.
-See `tool/ocr_worker/README.md`.
+Before any of this, two pages tell you without a camera whether anything
+is broken. `example/web/ocr_harness.html` exercises the engine, and
+`?fakeCamera=1` on the example itself exercises the whole scanner against
+a drawing of a card. See `tool/ocr_worker/README.md`. What is left below
+is what only hardware can answer.
 
 | Step | Expected |
 |---|---|
