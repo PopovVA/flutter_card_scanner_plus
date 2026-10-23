@@ -25,7 +25,13 @@ final class CameraSession: NSObject, FlutterTexture, AVCaptureVideoDataOutputSam
   /// Normalized (top-left origin) area of the preview to run OCR on.
   var regionOfInterest: CGRect? {
     get { recognizer.regionOfInterest }
-    set { recognizer.regionOfInterest = newValue }
+    set {
+      recognizer.regionOfInterest = newValue
+      // The guide's width is what decides how close a card has to be held,
+      // and therefore whether the lens can focus on it at all.
+      guideWidthFraction = newValue?.width
+      applyCloseUpZoom()
+    }
   }
 
   private let textures: FlutterTextureRegistry
@@ -42,6 +48,13 @@ final class CameraSession: NSObject, FlutterTexture, AVCaptureVideoDataOutputSam
 
   /// Sensor dimensions, before any rotation is applied.
   private let sensorSize: CGSize
+
+  /// Share of the preview's width the guide takes, from the last region of
+  /// interest. Drives the close-up zoom.
+  private var guideWidthFraction: CGFloat?
+
+  /// ISO 7810 ID-1: the width of every payment card, in millimetres.
+  private static let cardWidthMillimetres: Float = 85.6
 
   init(textures: FlutterTextureRegistry, onFrame: @escaping FrameHandler) throws {
     guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) else {
@@ -163,7 +176,65 @@ final class CameraSession: NSObject, FlutterTexture, AVCaptureVideoDataOutputSam
       : CGSize(width: sensorSize.width, height: sensorSize.height)
     let changed = size != previewSize
     previewSize = size
+    // Turning the device swaps which way the guide runs across the sensor,
+    // so the distance a card has to be held at changes with it.
+    applyCloseUpZoom()
     if notify && changed { onPreviewChanged?() }
+  }
+
+  /// Zooms in just enough that a card filling the guide sits beyond the
+  /// closest distance the lens can focus at.
+  ///
+  /// The main camera of a recent iPhone cannot focus nearer than about
+  /// 20 cm, while a card fills the guide at about 12 cm. Held where the
+  /// guide asks for it, the card simply never sharpens, however patient
+  /// the person is. Narrowing the field of view moves that framing
+  /// further away, which is what Apple's own close-up scanning sample
+  /// does.
+  ///
+  /// Cropping the sensor does not move the guide: the delivered frame
+  /// still covers exactly what is captured, so a region of interest
+  /// expressed as a fraction of it lines up as before.
+  private func applyCloseUpZoom() {
+    guard let fraction = guideWidthFraction, fraction > 0 else { return }
+    // Reported as -1 by a device that does not know.
+    let closest = Float(device.minimumFocusDistance)
+    guard closest > 0 else { return }
+
+    let fieldOfView = fieldOfViewAlongGuide()
+    guard fieldOfView > 0, fieldOfView < 180 else { return }
+    let span = 2 * tan(fieldOfView / 2 * .pi / 180)
+    guard span > 0 else { return }
+
+    // Where a card has to be held for it to fill that share of the frame.
+    let distance = Self.cardWidthMillimetres / (Float(fraction) * span)
+    guard distance > 0, distance < closest else { return }
+
+    let wanted = min(
+      CGFloat(closest / distance), device.activeFormat.videoMaxZoomFactor)
+    guard wanted > 1.01, abs(wanted - device.videoZoomFactor) > 0.01 else { return }
+
+    do {
+      try device.lockForConfiguration()
+      device.videoZoomFactor = wanted
+      device.unlockForConfiguration()
+    } catch {
+      // Zoom is best effort, like the torch.
+    }
+  }
+
+  /// The field of view across the guide's long side, in degrees.
+  ///
+  /// `videoFieldOfView` is the horizontal one, across the sensor's width.
+  /// In portrait the preview is turned a quarter, so the guide's long side
+  /// runs along the sensor's height instead.
+  private func fieldOfViewAlongGuide() -> Float {
+    let horizontal = device.activeFormat.videoFieldOfView
+    let landscape = previewSize.width > previewSize.height
+    guard !landscape, sensorSize.width > 0 else { return horizontal }
+    let radians = horizontal / 2 * .pi / 180
+    let ratio = Float(sensorSize.height / sensorSize.width)
+    return 2 * atan(tan(radians) * ratio) * 180 / .pi
   }
 
   /// Clockwise angle the buffer needs so its top matches the top of the UI.
@@ -215,6 +286,7 @@ final class CameraSession: NSObject, FlutterTexture, AVCaptureVideoDataOutputSam
       }
       if self.session.isRunning { self.session.stopRunning() }
       self.setTorch(false)
+      self.resetZoom()
       self.bufferLock.lock()
       self.latestBuffer = nil
       self.bufferLock.unlock()
@@ -222,6 +294,19 @@ final class CameraSession: NSObject, FlutterTexture, AVCaptureVideoDataOutputSam
         self.textures.unregisterTexture(self.textureId)
         completion()
       }
+    }
+  }
+
+  /// Puts the lens back where it was. The device outlives this session,
+  /// and whatever opens the camera next should not inherit a crop.
+  private func resetZoom() {
+    guard device.videoZoomFactor != 1 else { return }
+    do {
+      try device.lockForConfiguration()
+      device.videoZoomFactor = 1
+      device.unlockForConfiguration()
+    } catch {
+      // Best effort.
     }
   }
 
