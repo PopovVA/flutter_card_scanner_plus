@@ -1,5 +1,27 @@
 ## Unreleased
 
+### Web, memory on iPhone
+
+Field feedback from a production web app: on an iPhone, in a page that
+already holds a lot of memory, iOS killed the Safari tab while the engine
+loaded. Measured in the iOS Simulator.
+
+- `onnxruntime-web` is pinned to 1.18.0 and imported through `wasm-core`.
+  1.19 and later ship only a threaded build, whose loader asks for a 4 GB
+  shared `WebAssembly.Memory` even at one thread; iOS Safari refuses it
+  once the page holds other WebAssembly, and the engine failed to load at
+  all with "no available backend found". `install_web` installs the single
+  `ort-wasm-simd.wasm` and no module glue, and the worker bundle is 173 KB
+  rather than 190.
+- OpenCV's WebAssembly is installed as its own `opencv.wasm` instead of a
+  10 MB base64 `data:` URI inside a 10 MB script. Parsing and decoding
+  that string cost tens of megabytes of heap; the engine folder is also
+  33 MB rather than 38. `install_web` refuses to install an OpenCV whose
+  script no longer carries one inlined binary, rather than writing
+  something that will not load.
+- README: the memory budget, why CanvasKit makes it tight, and why the
+  runtime is pinned.
+
 ### Web
 
 - The scanner runs in a browser. Camera through `getUserMedia`, preview as

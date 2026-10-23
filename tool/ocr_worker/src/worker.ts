@@ -12,10 +12,12 @@ import Ocr, { registerBackend } from '@gutenye/ocr-common';
 // a backend that supplies everything else still wants the line splitter
 // the engine ships.
 import { splitIntoLineImages } from '@gutenye/ocr-common/splitIntoLineImages';
-// The wasm build only. The default entry point also carries the WebGL and
-// WebGPU backends, which this worker never asks for and which more than
-// doubled the bundle.
-import { InferenceSession, env } from 'onnxruntime-web/wasm';
+// wasm-core of 1.18, which is the last release with a single-threaded
+// build. From 1.19 the loader asks for a 4 GB shared WebAssembly.Memory
+// even at numThreads = 1, and iOS Safari refuses it once the page holds
+// other WebAssembly: "no available backend found. ERR: [wasm] RangeError:
+// Out of memory". See README, "Why ONNX Runtime is pinned".
+import { InferenceSession, env } from 'onnxruntime-web/wasm-core';
 
 import { ImageRaw } from './image_raw.js';
 
