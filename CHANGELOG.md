@@ -1,5 +1,20 @@
 ## Unreleased
 
+### Focus
+
+- iOS zooms in just enough that a card filling the guide sits beyond the
+  lens's closest focus. The main camera of a recent iPhone cannot focus
+  nearer than about 20 cm, while a card fills the guide at about 12 cm, so
+  on some phones it never sharpened at all. The zoom is computed from
+  `minimumFocusDistance`, the format's field of view and the width of the
+  guide, recomputed when either changes, capped by the format, and put back
+  when the session stops.
+- Cropping the sensor does not move the guide, so the region of interest
+  still lines up: the delivered frame covers exactly what is captured.
+- Android is untouched for now. The same thing may show on a flagship, and
+  CameraX would want its zoom ratio set from
+  `LENS_INFO_MINIMUM_FOCUS_DISTANCE`; nobody has reported it yet.
+
 ### Prompts
 
 - The scanner no longer sends people to the back of a card as soon as it
