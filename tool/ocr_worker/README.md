@@ -37,6 +37,36 @@ OpenCV is reached through `src/opencv_global.ts`, a proxy onto the global
 the script installs. Importing `@techstark/opencv-js` directly would bundle
 about 10 MB of generated bindings.
 
+## Trying it without a camera
+
+`example/web/ocr_harness.html` draws a synthetic card on a canvas, sends it
+to the worker and prints what comes back, with timings. It needs no camera
+and no Flutter build, which makes it the quickest way to tell whether a
+change to the engine still reads a card:
+
+```bash
+cd example
+dart run flutter_card_scanner_plus:install_web
+( cd web && python3 -m http.server 8731 )
+# then open http://localhost:8731/ocr_harness.html
+```
+
+A good run looks like this:
+
+```
+worker ready in 27 ms
+frame 0 in 945 ms, 3 lines
+   "ZEBRA MONEY"          c=0.97
+   "4111 1111 1111 1111"  c=0.98
+   "ALICE GREEN 12/28"    c=0.99
+frame 1 in 505 ms, 3 lines
+```
+
+The second frame is faster because the first one loads the models. That
+output is pinned in `test/web/engine_output_test.dart`, which checks the
+Dart side takes it apart correctly: note that the name and the expiry date
+arrive as one line, the way a printed row actually reaches the parser.
+
 ## Why a classic worker
 
 Recognition takes about a second a frame, and a second of a blocked main
