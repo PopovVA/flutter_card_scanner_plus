@@ -92,6 +92,15 @@ different: 0`; a difference in the third decimal of a confidence is worth
 explaining, not waving through, because it means the pixels reaching the
 model changed.
 
+`fake_camera.js` is not a harness but the thing that makes the whole
+scanner testable without a camera: open the example with `?fakeCamera=1`
+and `getUserMedia` returns a drawing of a card instead. `&w=`, `&h=` and
+`&card=` set the stream size and how much of it the card fills, which is
+what decides whether it lands inside the guide. A portrait stream on a
+phone sized viewport, `?fakeCamera=1&w=720&h=1280&card=0.56`, frames it
+about right. It found both of the bugs in the "Found by running it"
+section of the changelog.
+
 `ocr_soak.html` reads the same card 24 times and prints the mean of the
 first eight warm frames against the last eight. They should match: a scan
 that gets slower the longer it runs is OpenCV matrices never being

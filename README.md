@@ -163,20 +163,10 @@ overlayBuilder: (context, state, cardRect) => Stack(
 
 ```dart
 final camera = controller.value.camera;
-if (camera != null)
-  ClipRect(
-    child: FittedBox(
-      fit: BoxFit.cover,
-      child: SizedBox(
-        width: camera.previewWidth.toDouble(),
-        height: camera.previewHeight.toDouble(),
-        child: controller.buildPreview(camera),
-      ),
-    ),
-  )
+if (camera != null) ClipRect(child: controller.buildPreview(camera))
 ```
 
-Keep that geometry. The region of interest is computed from the same numbers, so a preview laid out differently reads a different part of the frame than the one under your guide.
+Give it the whole area your guide is drawn over, and nothing else. The preview fills that area the way `BoxFit.cover` would, each platform in its own way, and the region of interest is computed for exactly that. Scaling it yourself reads a different part of the frame than the one under your guide, and on the web it does not work at all: Flutter will not scale a platform view with a widget.
 
 ## Frame size
 

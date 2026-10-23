@@ -251,20 +251,11 @@ class _CardScannerViewState extends State<CardScannerView>
               fit: StackFit.expand,
               children: [
                 ColoredBox(color: widget.backgroundColor),
+                // The platform fills this box and crops what does not
+                // fit, which is the same geometry _previewRect works out
+                // for the region of interest.
                 if (camera != null)
-                  ClipRect(
-                    child: FittedBox(
-                      fit: BoxFit.cover,
-                      // Sized in the camera's own pixels and scaled from
-                      // there, which is the geometry the region of interest
-                      // is computed from as well.
-                      child: SizedBox(
-                        width: camera.previewWidth.toDouble(),
-                        height: camera.previewHeight.toDouble(),
-                        child: widget.controller.buildPreview(camera),
-                      ),
-                    ),
-                  ),
+                  ClipRect(child: widget.controller.buildPreview(camera)),
                 widget.overlayBuilder?.call(context, state, cardRect) ??
                     CardFrameOverlay(state: state, cardRect: cardRect),
               ],
