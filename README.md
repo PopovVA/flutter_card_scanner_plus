@@ -281,7 +281,7 @@ a different camera and a different OCR engine underneath.
 
 The browser has no system OCR, so the package brings its own: PaddleOCR
 PP-OCRv4 in a Web Worker. The models, the ONNX runtime's WebAssembly and
-OpenCV come to about 38 MB, which is why they are not package assets.
+OpenCV come to about 33 MB, which is why they are not package assets.
 Every iOS and Android build would carry them for nothing.
 
 Run this once per app, from the app's root:
@@ -292,7 +292,45 @@ dart run flutter_card_scanner_plus:install_web
 
 It writes `web/flutter_card_scanner_plus/`, fetching each file from npm at
 a pinned version and checking it against a pinned hash. Add that folder to
-`.gitignore` and run the command in CI rather than committing 38 MB.
+`.gitignore` and run the command in CI rather than committing 33 MB.
+
+It needs `npm` and `tar` on `PATH`. OpenCV is also split on the way in:
+its script ships with a 7.5 MB WebAssembly binary inlined as a 10 MB
+base64 `data:` URI, and parsing that string costs tens of megabytes of
+JavaScript heap. The installer writes the binary as `opencv.wasm` and
+points the script at it.
+
+### Memory, which is the whole story on iPhone
+
+The engine takes **300 to 500 MB** in iOS WebKit, and iOS kills a tab that
+passes about 2 GB. Measured in the iOS Simulator, loading the engine peaks
+around 258 MB and one 960 pixel frame peaks around 330 MB. Stopping the
+scanner terminates the worker and gives it all back.
+
+That matters because Flutter's own CanvasKit renderer is heavy in iOS
+Safari ([flutter/flutter#152709](https://github.com/flutter/flutter/issues/152709)),
+and since Flutter 3.29 there is no HTML renderer to fall back to. A host
+page already holding 1 GB has no headroom, and the tab dies while the
+engine loads, with nothing in the console and a bare reload to show for it.
+
+So: test the scanner inside your real app on a real iPhone, not only in
+the example. If the page is heavy, free what you can before opening the
+scanner, and close the scanner as soon as it has the card.
+
+### Why ONNX Runtime is pinned
+
+`onnxruntime-web` is pinned to **1.18.0** and the worker imports its
+`wasm-core` entry point. 1.19 and later ship only a threaded build, whose
+loader asks for a 4 GB shared `WebAssembly.Memory` even at one thread, and
+iOS Safari refuses it once the page holds other WebAssembly:
+
+```
+no available backend found. ERR: [wasm] RangeError: Out of memory,
+[cpu] Error: previous call to 'initWasm()' failed.
+```
+
+Upgrading it is not a version bump. It needs a run on a real iPhone, in a
+page that already holds a few hundred megabytes.
 
 ### Set a Content-Security-Policy on the worker
 
@@ -336,7 +374,8 @@ origin. How Safari applies a CSP to a worker has not been tested.
 | | Phone | Browser |
 |---|---|---|
 | Frames read | about 8 a second | about 1 a second |
-| First frame | immediate | 1 to 2 seconds, while 38 MB loads from cache |
+| First frame | immediate | 1 to 2 seconds, while 33 MB loads from cache |
+| Memory | tens of MB | 300 to 500 MB while scanning, freed on stop |
 | Preset | `ScanRequirements.standard` | `ScanRequirements.web` |
 | Torch | if the device has one | only when the browser admits to one |
 

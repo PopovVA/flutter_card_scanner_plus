@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 
 import '../controller/card_scanner_controller.dart';
@@ -34,6 +37,7 @@ class CardFrameOverlay extends StatefulWidget {
     this.showFields = true,
     this.hint,
     this.enableHaptics = false,
+    this.numberOverdueAfter = const Duration(seconds: 4),
   });
 
   /// What the scanner has found so far.
@@ -75,6 +79,14 @@ class CardFrameOverlay extends StatefulWidget {
   /// a scanner embedded in a larger flow may already have its own feedback.
   final bool enableHaptics;
 
+  /// How long a name is held without a number before the prompt suggests
+  /// turning the card over.
+  ///
+  /// A name often confirms a second or two before a number printed on the
+  /// same side, so asking immediately sent people to the back of cards
+  /// whose number was on the front.
+  final Duration numberOverdueAfter;
+
   @override
   State<CardFrameOverlay> createState() => _CardFrameOverlayState();
 }
@@ -83,26 +95,78 @@ class _CardFrameOverlayState extends State<CardFrameOverlay> {
   /// Room needed under the frame for the prompt and the fields.
   static const _fieldsMinHeight = 96.0;
 
-  late String _prompt = _promptFor(widget);
+  /// Set once a name has been held for [CardFrameOverlay.numberOverdueAfter]
+  /// with no number beside it.
+  bool _numberOverdue = false;
+  Timer? _overdue;
 
-  static String _promptFor(CardFrameOverlay widget) =>
+  late String _prompt = _promptFor(widget, false);
+
+  static String _promptFor(CardFrameOverlay widget, bool numberOverdue) =>
       widget.hint ??
       widget.strings.hintFor(
         widget.state.result,
         wantsName:
             widget.requirements.isRequired(CardField.name) ||
             widget.requirements.isPreferred(CardField.name),
+        numberOverdue: numberOverdue,
       );
+
+  /// Whether the scanner is holding a name and still has no number.
+  bool get _nameWithoutNumber {
+    final result = widget.state.result;
+    return result.hasName && !result.hasNumber;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _trackOverdueNumber();
+  }
+
+  @override
+  void dispose() {
+    _overdue?.cancel();
+    super.dispose();
+  }
 
   @override
   void didUpdateWidget(CardFrameOverlay old) {
     super.didUpdateWidget(old);
-    final next = _promptFor(widget);
+    _trackOverdueNumber();
+    _announce(_promptFor(widget, _numberOverdue));
+  }
+
+  /// Starts, keeps or drops the wait for a number to go with the name.
+  void _trackOverdueNumber() {
+    if (!_nameWithoutNumber) {
+      _overdue?.cancel();
+      _overdue = null;
+      _numberOverdue = false;
+      return;
+    }
+    if (_numberOverdue || _overdue != null) return;
+    _overdue = Timer(widget.numberOverdueAfter, () {
+      _overdue = null;
+      if (!mounted || !_nameWithoutNumber) return;
+      setState(() => _numberOverdue = true);
+      _announce(_promptFor(widget, true));
+    });
+  }
+
+  /// Says [next] out loud and in the hand, once, when it first appears.
+  void _announce(String next) {
     if (next == _prompt) return;
     _prompt = next;
     // One tap per step forward, so the card can be turned over without
     // watching the screen.
     if (widget.enableHaptics) HapticFeedback.lightImpact();
+    // And the same step for someone who cannot see the prompt at all.
+    SemanticsService.sendAnnouncement(
+      View.of(context),
+      next,
+      Directionality.of(context),
+    );
   }
 
   @override

@@ -1,5 +1,76 @@
 ## Unreleased
 
+### Focus
+
+- iOS zooms in just enough that a card filling the guide sits beyond the
+  lens's closest focus. The main camera of a recent iPhone cannot focus
+  nearer than about 20 cm, while a card fills the guide at about 12 cm, so
+  on some phones it never sharpened at all. The zoom is computed from
+  `minimumFocusDistance`, the format's field of view and the width of the
+  guide, recomputed when either changes, capped by the format, and put back
+  when the session stops.
+- Cropping the sensor does not move the guide, so the region of interest
+  still lines up: the delivered frame covers exactly what is captured.
+- Android is untouched for now. The same thing may show on a flagship, and
+  CameraX would want its zoom ratio set from
+  `LENS_INFO_MINIMUM_FOCUS_DISTANCE`; nobody has reported it yet.
+
+### Prompts
+
+- The scanner no longer sends people to the back of a card as soon as it
+  has a name. A name regularly confirms a second or two before a number
+  printed beside it, so a card whose number was on the front was being
+  turned over for nothing. The prompt waits for a name to be held without
+  a number for `CardFrameOverlay.numberOverdueAfter`, four seconds by
+  default, and `CardScannerStrings.hintFor` takes a `numberOverdue` flag so
+  it stays a pure function.
+- The wording hedges to match: "Name recognized. If the number is on the
+  back, turn the card over".
+- Every change of prompt is also announced to a screen reader, not only
+  tapped out as a haptic.
+
+### Web, memory per frame
+
+- The browser engine owns its PaddleOCR pipeline instead of borrowing
+  `@gutenye/ocr-common`. The borrowed one turned every frame into
+  JavaScript arrays a pixel at a time and then spread them into one array
+  of 1.75 million numbers, about 100 MB of garbage a frame. Both
+  conversions now write into a typed array of the final size, and the
+  detection mask is built as one byte per pixel rather than four plus a
+  colour conversion.
+- Every OpenCV matrix is released. The borrowed pipeline leaked four per
+  line of text, so a long scan grew an OpenCV heap that only a terminated
+  worker gave back.
+- Verified rather than assumed: `example/web/ocr_compare.html` runs the old
+  and the new worker over six synthetic cards at two sizes and reports
+  every line where they differ. All twelve match, text, confidences and
+  boxes. `example/web/ocr_soak.html` reads one card twenty-four times and
+  shows no drift, which is what the released matrices buy.
+- The worker bundle is 157 KB, down from 190, and `@gutenye/ocr-common` is
+  no longer a dependency. `js-clipper` is, directly.
+
+### Web, memory on iPhone
+
+Field feedback from a production web app: on an iPhone, in a page that
+already holds a lot of memory, iOS killed the Safari tab while the engine
+loaded. Measured in the iOS Simulator.
+
+- `onnxruntime-web` is pinned to 1.18.0 and imported through `wasm-core`.
+  1.19 and later ship only a threaded build, whose loader asks for a 4 GB
+  shared `WebAssembly.Memory` even at one thread; iOS Safari refuses it
+  once the page holds other WebAssembly, and the engine failed to load at
+  all with "no available backend found". `install_web` installs the single
+  `ort-wasm-simd.wasm` and no module glue, and the worker bundle is 173 KB
+  rather than 190.
+- OpenCV's WebAssembly is installed as its own `opencv.wasm` instead of a
+  10 MB base64 `data:` URI inside a 10 MB script. Parsing and decoding
+  that string cost tens of megabytes of heap; the engine folder is also
+  33 MB rather than 38. `install_web` refuses to install an OpenCV whose
+  script no longer carries one inlined binary, rather than writing
+  something that will not load.
+- README: the memory budget, why CanvasKit makes it tight, and why the
+  runtime is pinned.
+
 ### Web
 
 - The scanner runs in a browser. Camera through `getUserMedia`, preview as

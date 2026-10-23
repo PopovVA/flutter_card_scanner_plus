@@ -29,8 +29,8 @@ class CardScannerStrings {
         'Number and expiry recognized. Turn the card over '
         'to scan the name',
     this.lookingForNumber =
-        'Name recognized. Turn the card over to scan the '
-        'number and expiry date',
+        'Name recognized. If the number is on the back, '
+        'turn the card over',
     this.permissionDenied = 'Camera access is needed to scan a card.',
     this.openSettings = 'Open settings',
     this.cameraFailed = 'The camera could not be started.',
@@ -48,8 +48,11 @@ class CardScannerStrings {
   /// tells someone holding a two-sided card what to do.
   final String lookingForName;
 
-  /// The name is in but the number is not, which happens when a two-sided
-  /// card is presented back first.
+  /// The name is in but the number is not, and has not been for a while.
+  ///
+  /// Hedged on purpose. A name often confirms before a number printed on
+  /// the same side, so this is shown to someone who may well be holding
+  /// the right side of the card already.
   final String lookingForNumber;
 
   /// Camera permission was refused.
@@ -75,9 +78,21 @@ class CardScannerStrings {
   ///
   /// [wantsName] says whether the scan is still waiting for a cardholder
   /// name; without it the scanner would ask for one it does not need.
-  String hintFor(CardScanResult result, {bool wantsName = true}) {
+  ///
+  /// [numberOverdue] says that a name has been held for a while with no
+  /// number to go with it. Only then is the card worth turning over: a
+  /// name regularly confirms a second or two before a number printed
+  /// beside it, and people were being sent to the back of cards whose
+  /// number was on the front all along.
+  String hintFor(
+    CardScanResult result, {
+    bool wantsName = true,
+    bool numberOverdue = false,
+  }) {
     if (result.hasNumber && !result.hasExpiry) return lookingForExpiry;
-    if (result.hasName && !result.hasNumber) return lookingForNumber;
+    if (result.hasName && !result.hasNumber) {
+      return numberOverdue ? lookingForNumber : alignCard;
+    }
     if (result.hasNumber && result.hasExpiry && !result.hasName && wantsName) {
       return lookingForName;
     }

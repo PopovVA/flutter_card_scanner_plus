@@ -15,6 +15,8 @@ cd example && flutter run --release
 | Step | Expected |
 |---|---|
 | Hold the phone in landscape and scan a card | The card reads correctly, not just the number |
+| An iPhone Pro, card held where the guide asks | The preview sharpens; the lens zooms in a little by itself to make that possible |
+| The same phone, close the scanner and open the system camera | No leftover zoom |
 | Same on an iPad in landscape | Preview is upright, moving the tablet pans the image the way it should |
 | Rotate portrait to landscape and back, four times, then close and reopen | Preview is sharp and aligned, nothing drifts |
 | Lock the example to portrait, then turn the phone sideways | Guide and preview both stay upright |
@@ -55,6 +57,10 @@ flutter build web --release
 # then serve build/web over HTTPS on the LAN, for instance
 #   npx http-server build/web -S -C cert.pem -K key.pem -p 8443
 ```
+
+Before any of this, `example/web/ocr_harness.html` tells you in five
+seconds whether the engine itself still works, with no camera involved.
+See `tool/ocr_worker/README.md`.
 
 | Step | Expected |
 |---|---|

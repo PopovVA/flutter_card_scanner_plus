@@ -8,7 +8,9 @@
 // the package: every iOS and Android build would carry them for nothing.
 // They are fetched from npm at the versions pinned below, checked against
 // hashes recorded here, and written next to the app's index.html.
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 /// Folder created under the app's `web/`.
 const outputDirectory = 'flutter_card_scanner_plus';
@@ -24,6 +26,8 @@ class EngineFile {
     required this.path,
     required this.name,
     required this.sha512,
+    this.transform,
+    this.produces = const {},
   });
 
   /// npm package it comes from.
@@ -38,8 +42,25 @@ class EngineFile {
   /// Name to write it under.
   final String name;
 
-  /// Expected SHA-512 of the file, recorded when it was pinned.
+  /// Expected SHA-512 of the file as npm ships it, recorded when it was
+  /// pinned. A [transform] runs only after this matches.
   final String sha512;
+
+  /// Rewrites the file on the way in, given the bytes npm shipped and the
+  /// directory being written to. Returns a reason to stop, or `null`.
+  ///
+  /// Only OpenCV needs this, and it needs it badly: see [splitOpenCv].
+  final String? Function(List<int> bytes, Directory target)? transform;
+
+  /// What a [transform] writes, by name and expected SHA-512.
+  ///
+  /// These are what an existing install is checked against, since the bytes
+  /// on disk are no longer the ones npm shipped. A transform is
+  /// deterministic, so they are as fixed as [sha512] is.
+  final Map<String, String> produces;
+
+  /// Files this entry leaves on disk, by name.
+  Iterable<String> get outputs => produces.isEmpty ? [name] : produces.keys;
 
   /// The tarball npm serves for [package] at [version].
   String get tarballUrl {
@@ -62,24 +83,22 @@ const engine = [
     sha512:
         'ea579321bbfb7b6fced787e6bb3c7b1c821de548cd7935c4b8078a2f7712303a'
         '5dcba676cc288834a4018e3d3fc09e54775ae5ce99bb0b8e3c91c28c302aa4dc',
+    // Split before it is written. See [splitOpenCv].
+    transform: splitOpenCv,
+    produces: openCvOutputs,
   ),
+  // 1.18 is the last release with a single-threaded build. See the README
+  // section "Why ONNX Runtime is pinned": from 1.19 the loader asks for a
+  // 4 GB shared memory even at one thread, and iOS Safari refuses it.
+  // The glue code is inside the worker bundle, so there is no .mjs.
   EngineFile(
     package: 'onnxruntime-web',
-    version: '1.30.0',
-    path: 'dist/ort-wasm-simd-threaded.wasm',
-    name: 'ort-wasm-simd-threaded.wasm',
+    version: '1.18.0',
+    path: 'dist/ort-wasm-simd.wasm',
+    name: 'ort-wasm-simd.wasm',
     sha512:
-        '1adeded62203219fcf5c484cfce5657aa5875689b490423f86cf1ca1dd1cad77'
-        '15f630c6337f41db71ee42794e3a00ce0b7c78939a71220b5d83368bf6ea7730',
-  ),
-  EngineFile(
-    package: 'onnxruntime-web',
-    version: '1.30.0',
-    path: 'dist/ort-wasm-simd-threaded.mjs',
-    name: 'ort-wasm-simd-threaded.mjs',
-    sha512:
-        '21ba108743f06fed82bd495a1258e50552c95a515f1940b10aab94ea48f2c205'
-        'beaa3f7e0d9b4961253da6e786638038bd3d96e6b43c66de0234d2032fc29fd6',
+        '866358a04d466c0a334ea927bce02c2cf817623a5245c6cb8d1a60673747c8bd'
+        '68ffc2f9285c1a36aa12d152b0fe056da7e1e4cac146b33d453828a2c808ae6c',
   ),
   EngineFile(
     package: '@gutenye/ocr-models',
@@ -109,6 +128,82 @@ const engine = [
         '7fcb98ae3328f712958d142fa57bf5f6f21c219d90fda810aca397979fa9ccd4',
   ),
 ];
+
+/// What [splitOpenCv] writes, by name and expected SHA-512.
+///
+/// Recorded from a run against the pinned `opencv.js`: the split is a
+/// base64 decode and one string replacement, so it is reproducible.
+const openCvOutputs = {
+  'opencv.js':
+      '969b9062e1f4c8265a46de4908049a627e62103946a4f0cd6ac6ab74fd4fe2b7'
+      '64d4c1afe5f0bb33eec9946ff6e0b3f2b5ee4016c0dce9d66cbfd29e9e0d1a68',
+  'opencv.wasm':
+      '6acfa0cce16ecb54fe318969d76eab2a46e12bc8c9f504b01c69b36a62b68377'
+      '9c67eccb497f14bf87a995f90e6cfa2e8a2a5b7dac27ce802561196b7ad2e2bd',
+};
+
+/// How the quoted `data:` URI OpenCV carries its WebAssembly in starts.
+const _openCvDataUri = '"data:application/octet-stream;base64,';
+
+/// Writes OpenCV's WebAssembly as its own file and points `opencv.js` at
+/// it, instead of leaving 10 MB of base64 inside the script.
+///
+/// `@techstark/opencv-js` inlines the 7.5 MB binary as a `data:` URI.
+/// Parsing that string and decoding it costs tens of megabytes of
+/// JavaScript heap, which is the difference between a scan that runs on an
+/// iPhone and a tab the system kills. Safari also logs a CSP refusal for
+/// the fetch of that URI, which is harmless and alarming.
+///
+/// OpenCV resolves a bare name against the directory the script was loaded
+/// from, and in a worker that is this directory, so the name is enough.
+String? splitOpenCv(List<int> bytes, Directory target) {
+  final script = utf8.decode(bytes, allowMalformed: true);
+
+  // Found by hand rather than by pattern: the URI is 10 MB long, and a
+  // regular expression with a capture group that size overflows the stack.
+  //
+  // The prefix appears twice. The first is the empty literal OpenCV
+  // compares against to decide whether its binary is inlined, and it has
+  // to stay; the one worth splitting is the one carrying the binary.
+  var start = -1;
+  var from = -1;
+  var end = -1;
+  for (var at = script.indexOf(_openCvDataUri); at >= 0;) {
+    final payload = at + _openCvDataUri.length;
+    final close = script.indexOf('"', payload);
+    if (close > 0 && close - payload > _shortestWasm) {
+      start = at;
+      from = payload;
+      end = close;
+      break;
+    }
+    at = script.indexOf(_openCvDataUri, at + 1);
+  }
+  if (start < 0) {
+    return _openCvChanged;
+  }
+
+  final Uint8List wasm;
+  try {
+    wasm = base64.decode(script.substring(from, end));
+  } on FormatException {
+    return _openCvChanged;
+  }
+
+  File('${target.path}/opencv.wasm').writeAsBytesSync(wasm);
+  File('${target.path}/opencv.js')
+      .writeAsStringSync(script.replaceRange(start, end + 1, '"opencv.wasm"'));
+  return null;
+}
+
+/// Shortest base64 payload worth treating as the WebAssembly binary.
+/// OpenCV's is about 10 million characters; the decoy is empty.
+const _shortestWasm = 1024;
+
+const _openCvChanged =
+    'opencv.js no longer carries its WebAssembly as one quoted base64 data '
+    'URI. The split in bin/install_web.dart has to be revisited before this '
+    'version of OpenCV can be used.';
 
 Future<int> main(List<String> arguments) async {
   final force = arguments.contains('--force');
@@ -144,14 +239,11 @@ Future<int> main(List<String> arguments) async {
   final temporary = Directory.systemTemp.createTempSync('card_scanner_web');
   try {
     for (final file in engine) {
-      final written = File('${target.path}/${file.name}');
-      if (written.existsSync() && !force) {
-        final actual = await _sha512(written.path);
-        if (actual == file.sha512) {
-          stdout.writeln('  ${file.name}  already in place');
-          continue;
-        }
+      if (!force && await _alreadyInstalled(file, target)) {
+        stdout.writeln('  ${file.name}  already in place');
+        continue;
       }
+      final written = File('${target.path}/${file.name}');
       if (!await _fetch(file, temporary, written)) return 1;
     }
   } finally {
@@ -230,6 +322,21 @@ Iterable<String> _fromPackageConfig() {
   return ['$root/assets/$workerFile'];
 }
 
+/// Whether every file [entry] produces is already on disk and intact.
+///
+/// A machine with no SHA-512 tool cannot tell, and fetching again is the
+/// safe answer there.
+Future<bool> _alreadyInstalled(EngineFile entry, Directory target) async {
+  for (final name in entry.outputs) {
+    final file = File('${target.path}/$name');
+    if (!file.existsSync()) return false;
+    final actual = await _sha512(file.path);
+    if (actual == null) return false;
+    if (actual != (entry.produces[name] ?? entry.sha512)) return false;
+  }
+  return true;
+}
+
 /// Downloads [file]'s package, checks the file and writes it to [written].
 Future<bool> _fetch(EngineFile file, Directory temporary, File written) async {
   // One directory per package, so the tarball in it is unambiguous. Two
@@ -301,7 +408,17 @@ Future<bool> _fetch(EngineFile file, Directory temporary, File written) async {
       'taken on npm\'s word alone',
     );
   }
-  source.copySync(written.path);
+
+  final transform = file.transform;
+  if (transform != null) {
+    final refusal = transform(source.readAsBytesSync(), written.parent);
+    if (refusal != null) {
+      stderr.writeln(refusal);
+      return false;
+    }
+  } else {
+    source.copySync(written.path);
+  }
   stdout.writeln('  ${file.name}  ${_size(written.lengthSync())}');
   return true;
 }

@@ -8,8 +8,8 @@
     "build": "node build.mjs"
   },
   "dependencies": {
-    "@gutenye/ocr-common": "1.4.9",
-    "onnxruntime-web": "1.30.0"
+    "js-clipper": "1.0.1",
+    "onnxruntime-web": "1.18.0"
   },
   "devDependencies": {
     "@techstark/opencv-js": "4.9.0-release.3",
