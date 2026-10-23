@@ -24,6 +24,7 @@ Future<void> pumpOverlay(
   CardScannerState state, {
   ScanRequirements requirements = ScanRequirements.standard,
   bool enableHaptics = false,
+  Duration numberOverdueAfter = const Duration(seconds: 4),
 }) => tester.pumpWidget(
   MaterialApp(
     home: Stack(
@@ -33,6 +34,7 @@ Future<void> pumpOverlay(
           cardRect: const Rect.fromLTWH(20, 100, 350, 220),
           requirements: requirements,
           enableHaptics: enableHaptics,
+          numberOverdueAfter: numberOverdueAfter,
         ),
       ],
     ),
@@ -59,9 +61,60 @@ void main() {
     expect(find.text(_strings.lookingForName), findsOne);
   });
 
-  testWidgets('the name alone asks for the number', (tester) async {
-    await pumpOverlay(tester, stateWith(name: 'ADA LOVELACE'));
-    expect(find.text(_strings.lookingForNumber), findsOne);
+  group('the name alone', () {
+    testWidgets('does not send anyone to the back of the card at once', (
+      tester,
+    ) async {
+      await pumpOverlay(tester, stateWith(name: 'ADA LOVELACE'));
+
+      // A name regularly confirms a second or two before a number printed
+      // beside it, and the number may well be on this side.
+      expect(find.text(_strings.lookingForNumber), findsNothing);
+      expect(find.text(_strings.alignCard), findsOne);
+    });
+
+    testWidgets('suggests turning it over once the number is overdue', (
+      tester,
+    ) async {
+      await pumpOverlay(tester, stateWith(name: 'ADA LOVELACE'));
+      await tester.pump(const Duration(seconds: 5));
+
+      expect(find.text(_strings.lookingForNumber), findsOne);
+    });
+
+    testWidgets('says nothing about the back if the number arrives first', (
+      tester,
+    ) async {
+      await pumpOverlay(tester, stateWith(name: 'ADA LOVELACE'));
+      await tester.pump(const Duration(seconds: 2));
+      await pumpOverlay(tester, stateWith(name: 'ADA LOVELACE', number: visa));
+      await tester.pump(const Duration(seconds: 5));
+
+      expect(find.text(_strings.lookingForNumber), findsNothing);
+      expect(find.text(_strings.lookingForExpiry), findsOne);
+    });
+
+    testWidgets('drops the suggestion again when a number turns up', (
+      tester,
+    ) async {
+      await pumpOverlay(tester, stateWith(name: 'ADA LOVELACE'));
+      await tester.pump(const Duration(seconds: 5));
+      expect(find.text(_strings.lookingForNumber), findsOne);
+
+      await pumpOverlay(tester, stateWith(name: 'ADA LOVELACE', number: visa));
+      expect(find.text(_strings.lookingForNumber), findsNothing);
+    });
+
+    testWidgets('the wait is configurable', (tester) async {
+      await pumpOverlay(
+        tester,
+        stateWith(name: 'ADA LOVELACE'),
+        numberOverdueAfter: const Duration(milliseconds: 100),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text(_strings.lookingForNumber), findsOne);
+    });
   });
 
   testWidgets('a scan that does not want the name does not ask for it', (
@@ -136,6 +189,20 @@ void main() {
         enableHaptics: true,
       );
       expect(taps, hasLength(2));
+    });
+
+    testWidgets('one tap when the overdue number prompt appears', (
+      tester,
+    ) async {
+      await pumpOverlay(
+        tester,
+        stateWith(name: 'ADA LOVELACE'),
+        enableHaptics: true,
+      );
+      taps.clear();
+
+      await tester.pump(const Duration(seconds: 5));
+      expect(taps, hasLength(1));
     });
 
     testWidgets('silent by default', (tester) async {

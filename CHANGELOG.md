@@ -1,5 +1,19 @@
 ## Unreleased
 
+### Prompts
+
+- The scanner no longer sends people to the back of a card as soon as it
+  has a name. A name regularly confirms a second or two before a number
+  printed beside it, so a card whose number was on the front was being
+  turned over for nothing. The prompt waits for a name to be held without
+  a number for `CardFrameOverlay.numberOverdueAfter`, four seconds by
+  default, and `CardScannerStrings.hintFor` takes a `numberOverdue` flag so
+  it stays a pure function.
+- The wording hedges to match: "Name recognized. If the number is on the
+  back, turn the card over".
+- Every change of prompt is also announced to a screen reader, not only
+  tapped out as a haptic.
+
 ### Web, memory on iPhone
 
 Field feedback from a production web app: on an iPhone, in a page that
