@@ -73,9 +73,10 @@ class WebCamera {
     video.style
       ..width = '100%'
       ..height = '100%'
-      // The scanner scales and clips the element itself, so it must not
-      // letterbox or crop on its own.
-      ..objectFit = 'fill'
+      // The element covers its own box. Flutter will not scale a platform
+      // view with a widget: wrapped in a FittedBox, the host ends up a
+      // sliver at the foot of the page and the preview is invisible.
+      ..objectFit = 'cover'
       // Every touch belongs to Flutter, not to the video.
       ..pointerEvents = 'none';
 

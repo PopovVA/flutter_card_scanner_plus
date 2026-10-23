@@ -48,9 +48,12 @@ void main() {
     expect(fake.previews.last, _portrait);
   });
 
-  testWidgets('the preview is laid out in the camera pixel size', (
-    tester,
-  ) async {
+  testWidgets('the preview is handed the whole view to fill', (tester) async {
+    tester.view
+      ..physicalSize = const Size(393, 852)
+      ..devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
     final fake = RecordingPlatform(_portrait);
     final controller = CardScannerController(platform: fake);
     addTearDown(controller.dispose);
@@ -60,14 +63,17 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final box = tester.widget<SizedBox>(
-      find
-          .ancestor(
-            of: find.byType(Placeholder),
-            matching: find.byType(SizedBox),
-          )
-          .first,
-    );
+    // Not the camera's pixel size: a platform view cannot be scaled by a
+    // widget on the web, so each platform covers its own box instead.
+    expect(tester.getSize(find.byType(Placeholder)), const Size(393, 852));
+  });
+
+  test('the method channel platform covers the box it is given', () {
+    final preview = MethodChannelCardScannerPlatform().buildPreview(_portrait);
+
+    final fitted = preview as FittedBox;
+    expect(fitted.fit, BoxFit.cover);
+    final box = fitted.child! as SizedBox;
     expect(box.width, 1080);
     expect(box.height, 1920);
   });
@@ -90,7 +96,7 @@ void main() {
     expect(fake.previews.last, _landscape);
   });
 
-  test('the method channel platform draws a texture', () {
+  test('the method channel platform draws a rotated texture', () {
     final platform = MethodChannelCardScannerPlatform();
     final preview = platform.buildPreview(
       const CameraHandle(
@@ -101,7 +107,8 @@ void main() {
       ),
     );
 
-    final rotated = preview as RotatedBox;
+    final box = (preview as FittedBox).child! as SizedBox;
+    final rotated = box.child! as RotatedBox;
     expect(rotated.quarterTurns, 1);
     expect((rotated.child! as Texture).textureId, 3);
   });

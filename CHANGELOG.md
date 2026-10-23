@@ -1,5 +1,30 @@
 ## Unreleased
 
+### Found by running it
+
+The browser scanner had never been opened with a camera, only fed frames
+through a test page. Driving the example in a browser with a fake camera
+turned up two things a unit test could not.
+
+- The preview was invisible. `CardScannerView` scaled it with a
+  `FittedBox`, which works for a texture and does nothing for a DOM
+  element: Flutter left the platform view host as a 17 pixel strip at the
+  foot of the page. Filling is the platform's own business now. The view
+  hands over the whole area and each platform covers it in its own way, a
+  `FittedBox` on iOS and Android, `object-fit: cover` in a browser. The
+  region of interest already worked out that geometry, so it is unchanged.
+- The bank's name was being read as the cardholder's. Where the holder
+  name is not recognized, which happens to a small or faint one, the only
+  name-shaped line left is the issuer at the top of the card, and it was
+  returned. A name more than two number heights above the number is
+  refused outright now rather than merely scored down: a scan with no name
+  asks the person to type one, a scan with the bank's name asks them to
+  notice. A name printed just above the number still counts.
+- `example/web/fake_camera.js` replaces the camera with a drawing of a
+  card when the example is opened with `?fakeCamera=1`. It is how both of
+  these were found and is the quickest way to exercise the scanner without
+  a device.
+
 ### Focus
 
 - iOS zooms in just enough that a card filling the guide sits beyond the
