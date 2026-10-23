@@ -6,10 +6,16 @@
 	<string>NFC is used to read the card you hold against the phone.</string>
 	<key>com.apple.developer.nfc.readersession.iso7816.select-identifiers</key>
 	<array>
-		<string>2PAY.SYS.DDF01</string>
+		<string>325041592E5359532E4444463031</string>
 		<string>A0000000031010</string>
+		<string>A0000000032010</string>
 		<string>A0000000041010</string>
+		<string>A0000000043060</string>
 		<string>A00000002501</string>
+		<string>A0000000651010</string>
+		<string>A0000001523010</string>
+		<string>A0000006581010</string>
+		<string>A000000333010101</string>
 	</array>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Pick a card photo to scan.</string>
