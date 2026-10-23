@@ -83,3 +83,64 @@ is what only hardware can answer.
 |---|---|
 | Watch the prompt as fields are found | It names what is still missing, and a spinner runs |
 | With haptics on, let it move from one prompt to the next | One light tap per change, no buzzing |
+
+## NFC on a device
+
+NFC cannot be checked anywhere but on a phone, and it fails in ways the
+Dart side cannot see, so start by making the device talk.
+
+`flutter run` has been seen to print nothing at all from an app on a
+physical iPhone, in both debug and release, while `devicectl --console`
+and `flutter logs` stayed empty too. The Dart VM Service is the channel
+that does work. Take the websocket URI `flutter run` prints, connect to
+it, and subscribe to `Stdout`:
+
+```dart
+final socket = await WebSocket.connect(uri); // ws://127.0.0.1:PORT/TOKEN=/ws
+socket.add(jsonEncode({
+  'jsonrpc': '2.0', 'id': '0',
+  'method': 'streamListen', 'params': {'streamId': 'Stdout'},
+}));
+await for (final raw in socket) {
+  final event = jsonDecode(raw as String)['params']?['event'];
+  final bytes = event?['bytes'];
+  if (bytes != null) stdout.write(utf8.decode(base64Decode(bytes)));
+}
+```
+
+`CardNfcProbe.run` then reaches a laptop, and it stops before any record
+is read, so nothing it prints is card data.
+
+Two configuration mistakes refuse a session outright, and both look like
+the app's fault rather than the plist's.
+
+The identifiers in `com.apple.developer.nfc.readersession.iso7816.select-identifiers`
+have to be hex. `2PAY.SYS.DDF01` written out as text is not the PPSE AID;
+`325041592E5359532E4444463031` is. iOS selects each entry on the card
+itself and hands the tag to the app only on a match, so a readable name
+there means the system sheet opens and nothing ever happens.
+
+Adding `.iso18092` to the polling option without
+`com.apple.developer.nfc.readersession.felica.systemcodes` in the plist
+fails the whole session with "Missing required entitlement", including
+the ISO 14443 half that would otherwise have worked. MIFARE is ISO 14443
+anyway, so a transit card or a hotel key is detected without widening the
+polling at all, which makes them the cheapest tags to test with.
+
+| Step | Expected |
+|---|---|
+| Hold a contactless card to the top edge of the back | The sheet reports success; the probe lists the AIDs the card offered |
+| Dismiss the sheet by hand | `nfcCancelled`, no stuck session, the next attempt still works |
+| Hold a transit card or hotel key instead | Reaches `didDetect`, then refuses it as not a payment card |
+| Leave the sheet untouched | `nfcCancelled: Session timeout` after about a minute |
+| A phone with no NFC, or NFC off | `nfcUnavailable`, and the rest of the app keeps working |
+
+One failure is open and is not understood. On an iPhone on iOS 26.6 the
+session reaches `tagReaderSessionDidBecomeActive`, so the entitlement and
+the provisioning are right, and then `didDetect` is never called at all
+for a full minute of polling against several contactless cards. Removing
+the identifier list entirely, which should filter nothing, changed
+nothing. Whatever this is, it sits below the plugin: no plugin code runs
+between the session becoming active and the timeout. Before suspecting
+the plugin again, check the same cards with an unrelated NFC reader on
+the same phone.

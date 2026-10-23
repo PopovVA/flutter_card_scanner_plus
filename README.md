@@ -433,12 +433,24 @@ working.
 <string>NFC is used to read the card you hold against the phone.</string>
 <key>com.apple.developer.nfc.readersession.iso7816.select-identifiers</key>
 <array>
-  <string>2PAY.SYS.DDF01</string>
-  <string>A0000000031010</string>
-  <string>A0000000041010</string>
-  <string>A00000002501</string>
+  <string>325041592E5359532E4444463031</string> <!-- PPSE, 2PAY.SYS.DDF01 -->
+  <string>A0000000031010</string> <!-- Visa -->
+  <string>A0000000032010</string> <!-- Visa Electron -->
+  <string>A0000000041010</string> <!-- Mastercard -->
+  <string>A0000000043060</string> <!-- Maestro -->
+  <string>A00000002501</string> <!-- American Express -->
+  <string>A0000000651010</string> <!-- JCB -->
+  <string>A0000001523010</string> <!-- Discover -->
+  <string>A0000006581010</string> <!-- Mir -->
+  <string>A000000333010101</string> <!-- UnionPay -->
 </array>
 ```
+
+Those have to be hex, not the readable name: iOS selects each one on the card
+itself, and a card whose application is not in the list is never handed to the
+app at all, so the system sheet opens and nothing happens. The first entry is
+the payment directory every contactless card answers, which is the one that
+makes this work for cards no list could enumerate.
 
 Requires iOS 13 and an iPhone 7 or newer.
 

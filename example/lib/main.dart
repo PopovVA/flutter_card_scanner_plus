@@ -90,6 +90,10 @@ class _HomePageState extends State<HomePage> {
       return;
     }
     final report = await CardNfcProbe.run();
+    // Also to the console, so a run can be read from a laptop rather than
+    // copied off a phone. The probe stops before any record is read, so
+    // there is no card data in it.
+    debugPrint('--- NFC probe ---\n${report.summary}\n--- end ---');
     if (!mounted) return;
     showDialog<void>(
       context: context,
