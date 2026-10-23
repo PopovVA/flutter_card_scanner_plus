@@ -1,0 +1,65 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>worker harness</title>
+<body style="font:14px/1.5 monospace; padding:16px">
+<pre id="out">starting…</pre>
+<canvas id="card" width="960" height="600" style="width:480px;border:1px solid #ccc"></canvas>
+<script>
+const out = document.getElementById('out');
+const log = (m) => { out.textContent += '\n' + m; console.log('[harness] ' + m); };
+
+// A synthetic card: the layout a real one has, drawn with a plain font.
+function drawCard() {
+  const c = document.getElementById('card');
+  const g = c.getContext('2d');
+  g.fillStyle = '#1b3a5c'; g.fillRect(0, 0, c.width, c.height);
+  g.fillStyle = '#ffffff';
+  g.font = 'bold 72px "Courier New", monospace';
+  g.fillText('4111 1111 1111 1111', 40, 320);
+  g.font = 'bold 40px "Courier New", monospace';
+  g.fillText('ALICE GREEN', 40, 470);
+  g.fillText('12/28', 640, 470);
+  g.font = 'bold 44px "Helvetica", sans-serif';
+  g.fillText('ZEBRA MONEY', 40, 110);
+  return c;
+}
+
+(async () => {
+  const canvas = drawCard();
+  log('card drawn ' + canvas.width + 'x' + canvas.height);
+
+  const worker = new Worker('flutter_card_scanner_plus/card_ocr_worker.js');
+  const started = performance.now();
+  let readyAt = 0;
+
+  worker.onerror = (e) => log('WORKER ERROR ' + (e.message || e.type));
+
+  const answers = new Map();
+  worker.onmessage = (e) => {
+    const d = e.data || {};
+    if (d.ready) { readyAt = performance.now(); log('worker ready in ' + Math.round(readyAt - started) + ' ms'); return; }
+    const settle = answers.get(d.id);
+    if (settle) { answers.delete(d.id); settle(d); }
+  };
+
+  const recognize = async (id) => {
+    const bitmap = await createImageBitmap(canvas);
+    const answer = new Promise((r) => answers.set(id, r));
+    worker.postMessage({ id, bitmap }, [bitmap]);
+    return answer;
+  };
+
+  for (let i = 0; i < 2; i++) {
+    const at = performance.now();
+    const reply = await recognize(i);
+    const took = Math.round(performance.now() - at);
+    if (reply.error) { log('frame ' + i + ' FAILED after ' + took + ' ms: ' + reply.error); break; }
+    log('frame ' + i + ' in ' + took + ' ms, ' + reply.lines.length + ' lines');
+    for (const line of reply.lines) {
+      log('   "' + line.text + '" c=' + line.confidence.toFixed(2) +
+          ' box=' + ['left','top','width','height'].map(k => line.box[k].toFixed(3)).join(','));
+    }
+  }
+  log('DONE');
+})().catch((e) => log('HARNESS ERROR ' + (e && e.message || e)));
+</script>

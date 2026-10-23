@@ -58,6 +58,10 @@ flutter build web --release
 #   npx http-server build/web -S -C cert.pem -K key.pem -p 8443
 ```
 
+Before any of this, `example/web/ocr_harness.html` tells you in five
+seconds whether the engine itself still works, with no camera involved.
+See `tool/ocr_worker/README.md`.
+
 | Step | Expected |
 |---|---|
 | iOS Safari and Android Chrome, scan a card | Reads it; the first frame takes a second or two while the engine loads |
