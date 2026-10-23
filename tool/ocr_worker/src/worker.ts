@@ -7,19 +7,12 @@
 // Everything the engine loads at run time, OpenCV, the ONNX runtime's
 // WebAssembly and the two models, is fetched from the folder this script
 // was loaded from. Nothing is fetched from a third party.
-import Ocr, { registerBackend } from '@gutenye/ocr-common';
-// Its own entry point, because the engine exports it for exactly this:
-// a backend that supplies everything else still wants the line splitter
-// the engine ships.
-import { splitIntoLineImages } from '@gutenye/ocr-common/splitIntoLineImages';
-// wasm-core of 1.18, which is the last release with a single-threaded
-// build. From 1.19 the loader asks for a 4 GB shared WebAssembly.Memory
-// even at numThreads = 1, and iOS Safari refuses it once the page holds
-// other WebAssembly: "no available backend found. ERR: [wasm] RangeError:
-// Out of memory". See README, "Why ONNX Runtime is pinned".
-import { InferenceSession, env } from 'onnxruntime-web/wasm-core';
+import { env } from 'onnxruntime-web/wasm-core';
 
-import { ImageRaw } from './image_raw.js';
+import { type Quad } from './boxes.js';
+import { Detection } from './detection.js';
+import { pixelsOf } from './image.js';
+import { Recognition } from './recognition.js';
 
 declare const self: DedicatedWorkerGlobalScope & {
   cv?: { onRuntimeInitialized?: () => void };
@@ -27,11 +20,11 @@ declare const self: DedicatedWorkerGlobalScope & {
 
 type Request = { id: number; bitmap: ImageBitmap };
 
-type Line = { text: string; mean: number; box?: number[][] };
+type Engine = { detection: Detection; recognition: Recognition };
 
 const base = new URL('./', self.location.href).href;
 
-let engine: Promise<Ocr> | null = null;
+let engine: Promise<Engine> | null = null;
 
 /// Loads OpenCV and waits for its WebAssembly to finish starting.
 ///
@@ -60,7 +53,7 @@ function loadOpenCv(): Promise<void> {
   });
 }
 
-async function load(): Promise<Ocr> {
+async function load(): Promise<Engine> {
   await loadOpenCv();
 
   // The runtime's own files sit next to this script.
@@ -69,55 +62,21 @@ async function load(): Promise<Ocr> {
   // which is not something a package can ask of every host app.
   env.wasm.numThreads = 1;
 
-  registerBackend({
-    FileUtils: {
-      read: async (path: string) => {
-        const response = await fetch(path);
-        if (!response.ok) {
-          throw new Error(`Could not read ${path}`);
-        }
-        return response.text();
-      },
-    },
-    ImageRaw,
-    InferenceSession,
-    splitIntoLineImages,
-    defaultModels: undefined,
-  } as never);
-
-  return Ocr.create({
-    models: {
-      detectionPath: `${base}ch_PP-OCRv4_det_infer.onnx`,
-      recognitionPath: `${base}ch_PP-OCRv4_rec_infer.onnx`,
-      dictionaryPath: `${base}ppocr_keys_v1.txt`,
-    },
-    onnxOptions: { executionProviders: ['wasm'] },
-  });
-}
-
-/// The pixels of [bitmap], which is closed either way.
-function pixelsOf(bitmap: ImageBitmap): ImageRaw {
-  try {
-    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
-    const context = canvas.getContext('2d');
-    if (!context) throw new Error('No 2d context in this worker');
-    context.drawImage(bitmap, 0, 0);
-    const image = context.getImageData(0, 0, bitmap.width, bitmap.height);
-    return new ImageRaw({
-      data: image.data,
-      width: bitmap.width,
-      height: bitmap.height,
-    });
-  } finally {
-    bitmap.close();
-  }
+  const [detection, recognition] = await Promise.all([
+    Detection.load(`${base}ch_PP-OCRv4_det_infer.onnx`),
+    Recognition.load(
+      `${base}ch_PP-OCRv4_rec_infer.onnx`,
+      `${base}ppocr_keys_v1.txt`,
+    ),
+  ]);
+  return { detection, recognition };
 }
 
 /// The engine reports a quadrilateral in the pixels of the image it
 /// resized internally. The scanner wants an upright box as a fraction of
 /// the crop it sent, which is what every box in the Dart core is.
 function normalize(
-  box: number[][] | undefined,
+  box: Quad | undefined,
   width: number,
   height: number,
 ): { left: number; top: number; width: number; height: number } | null {
@@ -152,20 +111,17 @@ self.onmessage = async (event: MessageEvent<Request>) => {
 
   try {
     engine ??= load();
-    const ocr = await engine;
-    const image = pixelsOf(bitmap);
-    const result = await ocr.detect(image.getImageRawData());
+    const { detection, recognition } = await engine;
 
-    const lines = (result.texts as Line[])
+    const detected = await detection.run(pixelsOf(bitmap));
+    const read = await recognition.run(detected.lines);
+
+    const lines = read
       .map((line) => {
-        const box = normalize(
-          line.box,
-          result.resizedImageWidth as number,
-          result.resizedImageHeight as number,
-        );
+        const box = normalize(line.box, detected.width, detected.height);
         return {
-          text: line.text ?? '',
-          confidence: typeof line.mean === 'number' ? line.mean : 1,
+          text: line.text,
+          confidence: line.confidence,
           box: box ?? { left: 0, top: 0, width: 0, height: 0 },
         };
       })

@@ -1,0 +1,104 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>worker comparison</title>
+<body style="font:13px/1.45 monospace; padding:16px">
+<pre id="out">starting…</pre>
+<script>
+const out = document.getElementById('out');
+const log = (m) => { out.textContent += '\n' + m; };
+
+/// Six synthetic cards: the layouts and typefaces a real one uses.
+const cards = [
+  { name: 'courier, spaced number', font: 'bold 72px "Courier New", monospace',
+    pan: '4111 1111 1111 1111', holder: 'ALICE GREEN', expiry: '12/28', bank: 'ZEBRA MONEY' },
+  { name: 'courier, unspaced number', font: 'bold 72px "Courier New", monospace',
+    pan: '4111111111111111', holder: 'JOHN A BLACK', expiry: '09/27', bank: 'ZEBRA MONEY' },
+  { name: 'helvetica', font: 'bold 70px Helvetica, Arial, sans-serif',
+    pan: '5555 5555 5555 4444', holder: 'MARIA DE LA CRUZ', expiry: '03/30', bank: 'CIRCLE BANK' },
+  { name: 'amex, 15 digits', font: 'bold 70px "Courier New", monospace',
+    pan: '3782 822463 10005', holder: 'WREN A. NGUYEN', expiry: '11/29', bank: 'ZEBRA MONEY' },
+  { name: 'suffix in the name', font: 'bold 70px Helvetica, Arial, sans-serif',
+    pan: '6011 1111 1111 1117', holder: 'DEL SMITH JR', expiry: '01/31', bank: 'CIRCLE BANK' },
+  { name: 'georgia, tight', font: 'bold 66px Georgia, serif',
+    pan: '3530 1113 3330 0000', holder: 'AMARA OKOYE-BELL', expiry: '07/26', bank: 'ZEBRA MONEY' },
+];
+
+function draw(card, width) {
+  const height = Math.round(width * 600 / 960);
+  const scale = width / 960;
+  const c = new OffscreenCanvas(width, height);
+  const g = c.getContext('2d');
+  g.fillStyle = '#1b3a5c'; g.fillRect(0, 0, width, height);
+  g.fillStyle = '#ffffff';
+  g.setTransform(scale, 0, 0, scale, 0, 0);
+  g.font = card.font;
+  g.fillText(card.pan, 40, 320);
+  g.font = card.font.replace(/\d+px/, '40px');
+  g.fillText(card.holder, 40, 470);
+  g.fillText(card.expiry, 700, 470);
+  g.font = card.font.replace(/\d+px/, '44px');
+  g.fillText(card.bank, 40, 110);
+  return c;
+}
+
+function spawn(file) {
+  const worker = new Worker('flutter_card_scanner_plus/' + file);
+  const answers = new Map();
+  let next = 0;
+  const ready = new Promise((r) => { answers.set('ready', r); });
+  worker.onmessage = (e) => {
+    const d = e.data || {};
+    if (d.ready) { answers.get('ready')?.(); return; }
+    answers.get(d.id)?.(d);
+    answers.delete(d.id);
+  };
+  worker.onerror = (e) => log('WORKER ERROR in ' + file + ': ' + (e.message || e.type));
+  return {
+    ready,
+    async read(canvas) {
+      const bitmap = await createImageBitmap(canvas);
+      const id = next++;
+      const answer = new Promise((r) => answers.set(id, r));
+      worker.postMessage({ id, bitmap }, [bitmap]);
+      return answer;
+    },
+  };
+}
+
+const shape = (reply) => (reply.lines || [])
+  .map((l) => l.text + '|' + l.confidence.toFixed(3) + '|' +
+    ['left','top','width','height'].map((k) => l.box[k].toFixed(4)).join(','))
+  .join('\n');
+
+(async () => {
+  const before = spawn('card_ocr_worker_old.js');
+  const after = spawn('card_ocr_worker.js');
+  await Promise.all([before.ready, after.ready]);
+  log('both workers ready');
+
+  let same = 0, different = 0;
+  for (const width of [960, 720]) {
+    for (const card of cards) {
+      const canvas = draw(card, width);
+      const a = await before.read(canvas);
+      const b = await after.read(canvas);
+      if (a.error || b.error) {
+        log(`${width}px ${card.name}: ERROR old=${a.error || '-'} new=${b.error || '-'}`);
+        different++;
+        continue;
+      }
+      if (shape(a) === shape(b)) {
+        same++;
+        log(`${width}px ${card.name}: same, ${b.lines.length} lines`);
+      } else {
+        different++;
+        log(`${width}px ${card.name}: DIFFERENT`);
+        log('  old:\n' + shape(a).split('\n').map((l) => '    ' + l).join('\n'));
+        log('  new:\n' + shape(b).split('\n').map((l) => '    ' + l).join('\n'));
+      }
+    }
+  }
+  log(`\nsame: ${same}, different: ${different}`);
+  log('DONE');
+})().catch((e) => log('HARNESS ERROR ' + (e && e.message || e)));
+</script>
