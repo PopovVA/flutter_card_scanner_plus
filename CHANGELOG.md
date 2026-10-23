@@ -29,6 +29,26 @@
 - Every change of prompt is also announced to a screen reader, not only
   tapped out as a haptic.
 
+### Web, memory per frame
+
+- The browser engine owns its PaddleOCR pipeline instead of borrowing
+  `@gutenye/ocr-common`. The borrowed one turned every frame into
+  JavaScript arrays a pixel at a time and then spread them into one array
+  of 1.75 million numbers, about 100 MB of garbage a frame. Both
+  conversions now write into a typed array of the final size, and the
+  detection mask is built as one byte per pixel rather than four plus a
+  colour conversion.
+- Every OpenCV matrix is released. The borrowed pipeline leaked four per
+  line of text, so a long scan grew an OpenCV heap that only a terminated
+  worker gave back.
+- Verified rather than assumed: `example/web/ocr_compare.html` runs the old
+  and the new worker over six synthetic cards at two sizes and reports
+  every line where they differ. All twelve match, text, confidences and
+  boxes. `example/web/ocr_soak.html` reads one card twenty-four times and
+  shows no drift, which is what the released matrices buy.
+- The worker bundle is 157 KB, down from 190, and `@gutenye/ocr-common` is
+  no longer a dependency. `js-clipper` is, directly.
+
 ### Web, memory on iPhone
 
 Field feedback from a production web app: on an iPhone, in a page that
