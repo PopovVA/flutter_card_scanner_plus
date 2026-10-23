@@ -26,9 +26,12 @@ from the folder the worker was loaded from, which
 `dart run flutter_card_scanner_plus:install_web` fills in. `bin/install_web.dart`
 pins their versions and hashes, so upgrading one means changing both files.
 
-Only the wasm entry point of `onnxruntime-web` is imported. The default one
-also carries the WebGL and WebGPU backends, which this worker never asks
-for and which more than doubled the bundle.
+`onnxruntime-web` is pinned to 1.18.0 and imported through `wasm-core`.
+1.19 and later ship only a threaded build, whose loader asks iOS Safari for
+a 4 GB shared memory even at one thread and is refused; `wasm-core` also
+leaves out the WebGL and WebGPU backends this worker never asks for, which
+on their own more than doubled the bundle. The README's "Why ONNX Runtime
+is pinned" has the error it produces.
 
 OpenCV is reached through `src/opencv_global.ts`, a proxy onto the global
 the script installs. Importing `@techstark/opencv-js` directly would bundle

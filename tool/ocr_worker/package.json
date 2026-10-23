@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@gutenye/ocr-common": "1.4.9",
-    "onnxruntime-web": "1.30.0"
+    "onnxruntime-web": "1.18.0"
   },
   "devDependencies": {
     "@techstark/opencv-js": "4.9.0-release.3",
