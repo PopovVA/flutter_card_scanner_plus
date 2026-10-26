@@ -1,3 +1,15 @@
+## 0.3.1
+
+No code changed. The package had stopped describing itself correctly.
+
+- The platform badge still read "iOS | Android", and the opening sentence
+  still named only Vision and ML Kit, a release after the browser scanner
+  shipped. pub.dev itself had the web platform right, which is what made
+  the badge worth believing and therefore worth fixing.
+- The package description, which is what a search result shows, now says
+  the web is supported rather than leaving a reader to find out from the
+  platform list further down.
+
 ## 0.3.0
 
 ### Breaking
