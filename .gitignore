@@ -32,7 +32,7 @@ migrate_working_dir/
 /build/
 /coverage/
 
-# The browser OCR engine: 38 MB fetched by
+# The browser OCR engine: 51 MB fetched by
 # `dart run flutter_card_scanner_plus:install_web`, not committed.
 example/web/flutter_card_scanner_plus/
 

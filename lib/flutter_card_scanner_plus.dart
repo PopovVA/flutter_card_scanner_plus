@@ -2,7 +2,8 @@
 ///
 /// Recognizes Visa, Mastercard, American Express, Discover, JCB, Diners
 /// Club and UnionPay cards using the platform OCR engine (Vision on iOS,
-/// ML Kit on Android). Frames never leave the device.
+/// ML Kit on Android, PaddleOCR in a browser). Frames never leave the
+/// device.
 library;
 
 export 'src/core/card_brand.dart';
@@ -22,4 +23,5 @@ export 'src/ui/card_frame_overlay.dart';
 export 'src/ui/card_scanner_page.dart';
 export 'src/ui/card_scanner_strings.dart';
 export 'src/ui/card_scanner_view.dart';
+export 'src/web/ocr_engine.dart' show OcrBackend, OcrEngineReport;
 export 'src/card_scanner.dart';

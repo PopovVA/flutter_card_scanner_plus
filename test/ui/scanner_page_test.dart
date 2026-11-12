@@ -1,5 +1,8 @@
 import 'dart:async';
 
+// Deprecated by Flutter 3.50 for package:material_ui. Kept until the
+// package itself moves: see lib/src/ui/card_scanner_page.dart.
+// ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter_card_scanner_plus/flutter_card_scanner_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -98,6 +101,20 @@ void main() {
       );
       await openPage(tester);
       expect(find.text(_strings.cameraFailed), findsOne);
+    });
+
+    testWidgets('a browser too slow to scan in points at a form', (
+      tester,
+    ) async {
+      await openPage(tester);
+
+      // Reported by the engine after the camera opened, not by the start.
+      fake.fail(const CardScannerException(CardScannerException.tooSlow));
+      await tester.pumpAndSettle();
+
+      expect(find.text(_strings.tooSlow), findsOne);
+      expect(find.text(_strings.cameraFailed), findsNothing);
+      expect(find.byType(CloseButton), findsOne, reason: 'a way out');
     });
 
     testWidgets('trying again opens the camera', (tester) async {

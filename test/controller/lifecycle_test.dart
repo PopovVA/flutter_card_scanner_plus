@@ -1,5 +1,8 @@
 import 'dart:async';
 
+// Deprecated by Flutter 3.50 for package:material_ui. Kept until the
+// package itself moves: see lib/src/ui/card_scanner_page.dart.
+// ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter_card_scanner_plus/flutter_card_scanner_plus.dart';
 import 'package:flutter_test/flutter_test.dart';

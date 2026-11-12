@@ -74,7 +74,7 @@ jobs:
           cache: true
       - run: flutter pub get
         working-directory: example
-      # Fetches the OCR engine, about 38 MB, the same way an app does. It
+      # Fetches the OCR engine, about 51 MB, the same way an app does. It
       # also proves the installer still works against the pinned versions.
       - run: dart run flutter_card_scanner_plus:install_web
         working-directory: example
@@ -95,12 +95,17 @@ jobs:
         working-directory: tool/ocr_worker
       - run: npx tsc --noEmit
         working-directory: tool/ocr_worker
-      # The committed bundle has to match its sources, or an app would get
-      # a worker nobody reviewed.
+      # The committed bundles have to match their sources, or an app would
+      # get a worker nobody reviewed. Both are built from the same sources:
+      # one runs the models in WebAssembly, the other on the GPU.
       - run: npm run build
         working-directory: tool/ocr_worker
-      - name: The bundle in assets/ matches tool/ocr_worker
-        run: git diff --exit-code -- assets/card_ocr_worker.js
+      - name: The bundles in assets/ match tool/ocr_worker
+        run: |
+          git diff --exit-code -- assets/
+          # A bundle the build writes and nobody committed is as wrong as
+          # one that differs.
+          test -z "$(git status --porcelain -- assets/)"
 
   publish-dry-run:
     name: pub.dev dry run

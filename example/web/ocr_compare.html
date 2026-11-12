@@ -7,6 +7,22 @@
 const out = document.getElementById('out');
 const log = (m) => { out.textContent += '\n' + m; };
 
+// ?old= and ?new= name the two builds. The default pair is the build
+// being replaced against the one replacing it. To set the WebGPU build
+// against the WebAssembly one:
+//
+//   ?old=card_ocr_worker.js&new=card_ocr_worker_webgpu.js&text=1
+//
+// &text=1 compares what was read and not the third decimal of how sure
+// the model was, which a GPU and a CPU do not agree on. &softwareGpu=1
+// lets the WebGPU build run on a software adapter, for a machine with no
+// GPU; expect most of a minute per card there.
+const parameters = new URLSearchParams(location.search);
+const oldFile = parameters.get('old') || 'card_ocr_worker_old.js';
+const newFile = parameters.get('new') || 'card_ocr_worker.js';
+const textOnly = parameters.get('text') === '1';
+const suffix = parameters.get('softwareGpu') === '1' ? '?softwareGpu=1' : '';
+
 /// Six synthetic cards: the layouts and typefaces a real one uses.
 const cards = [
   { name: 'courier, spaced number', font: 'bold 72px "Courier New", monospace',
@@ -42,7 +58,7 @@ function draw(card, width) {
 }
 
 function spawn(file) {
-  const worker = new Worker('flutter_card_scanner_plus/' + file);
+  const worker = new Worker('flutter_card_scanner_plus/' + file + suffix);
   const answers = new Map();
   let next = 0;
   const ready = new Promise((r) => { answers.set('ready', r); });
@@ -66,13 +82,14 @@ function spawn(file) {
 }
 
 const shape = (reply) => (reply.lines || [])
-  .map((l) => l.text + '|' + l.confidence.toFixed(3) + '|' +
+  .map((l) => textOnly ? l.text : l.text + '|' + l.confidence.toFixed(3) + '|' +
     ['left','top','width','height'].map((k) => l.box[k].toFixed(4)).join(','))
   .join('\n');
 
 (async () => {
-  const before = spawn('card_ocr_worker_old.js');
-  const after = spawn('card_ocr_worker.js');
+  log('old: ' + oldFile + ', new: ' + newFile + (textOnly ? ', text only' : ''));
+  const before = spawn(oldFile);
+  const after = spawn(newFile);
   await Promise.all([before.ready, after.ready]);
   log('both workers ready');
 

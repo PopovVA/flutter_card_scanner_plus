@@ -1,3 +1,161 @@
+## 0.4.0
+
+Field feedback from a production web app, again. In iOS 27 Safari some
+sessions run WebAssembly about fifteen times slower than normal. Nothing
+fails: the camera opens, the engine loads, and a frame takes 7 to 20
+seconds instead of under one, so a scan neither reads the card nor gives
+up. The same models on WebGPU read cards on those phones at about a
+second a frame. This release is that, and the way out for a browser that
+has no WebGPU to fall back on.
+
+Nothing changes on iOS or Android.
+
+### Upgrading
+
+
+- Run `dart run flutter_card_scanner_plus:install_web` again. There are
+  two workers now and one more runtime file, and the scanner asks the
+  worker for things a 0.3 worker does not answer. An engine folder left
+  over from 0.3 is noticed and reported as `ocrUnavailable` at once, with
+  a message saying to run the installer, rather than after a two minute
+  wait.
+- Serve the second worker, `card_ocr_worker_webgpu.js`, with the same
+  Content-Security-Policy as the first. A glob over `card_ocr_worker*.js`
+  covers both.
+- Serve the engine folder with `Cache-Control: no-cache`. See below.
+
+### Web, two engines
+
+
+- A second worker, `card_ocr_worker_webgpu.js`, runs the two models on the
+  GPU through ONNX Runtime's WebGPU provider. It is built from the same
+  sources as `card_ocr_worker.js`, with one import pointed elsewhere and
+  one constant changed, so the pipeline and the lines it returns are the
+  same. Only the model graphs are on the GPU: OpenCV and the pixel work
+  stay in WebAssembly.
+- The scanner starts the WebGPU worker where the page has `navigator.gpu`
+  and the WebAssembly worker otherwise. A WebGPU engine that fails to load
+  is terminated and replaced by the WebAssembly one, and the page stays
+  with that choice. There is nothing to configure.
+- Loading is a step of its own, apart from reading frames. A failed load
+  used to be indistinguishable from a failed frame; now the first means
+  try the other build and the second means try the next frame.
+- That also fixes the load timeout, which had never applied. The worker
+  said it was ready before it had loaded anything, and the engine loaded
+  inside the first frame, so tens of megabytes of download ran under that
+  frame's 20 seconds rather than the engine's two minutes. On a slow
+  connection three such frames ran out, the scanner reported
+  `ocrUnavailable`, and the restart threw away what had arrived.
+- ONNX Runtime stays on 1.18.0, and the WebGPU worker loads its
+  single-threaded `ort-wasm-simd.jsep.wasm`, so the 4 GB shared memory
+  that 1.19 asks iOS for does not come back. 1.18 calls
+  `GPUAdapter.requestAdapterInfo()`, which browsers have removed, and its
+  WebGPU provider does not start without it. The worker puts it back.
+
+### Web, a browser too slow to scan in
+
+
+- `CardScannerException.tooSlow`. Before it sends a frame, the WebAssembly
+  worker times a 66 byte WebAssembly loop: five million steps, fastest of
+  three runs. An iPhone takes 4 to 15 ms normally and 55 to 87 ms in the
+  slow state. Above 40 ms the scanner frees the engine and reports
+  `tooSlow` instead of scanning, so the person is sent to a form at once
+  and not after a minute of frames timing out.
+- It is asked twice. Before the engine is fetched, so a browser in that
+  state does not download 33 MB to throw away; and again after the load,
+  because after the load is where the state was measured in the field and
+  nobody has shown it is always there before.
+- It is not asked on WebGPU. The phones that fail it read cards there.
+- `CardScannerStrings.tooSlow` is what `CardScannerPage` shows for it. The
+  default tells the person to enter the card by hand.
+
+### Web, knowing which engine ran
+
+
+- `CardScanner.engineReports` emits an `OcrEngineReport` each time a scan
+  loads the browser engine: which `OcrBackend` it was, how long the load
+  took, what the benchmark measured, whether it was too slow, and why
+  WebGPU was passed over when it was. `CardScanner.lastEngineReport` keeps
+  the latest. No card data is in it, and nothing is emitted on a phone.
+- The example shows it under the scan buttons.
+
+### Found by running it
+
+
+- A WebGPU adapter can be software. Headless Chromium on SwiftShader
+  loaded the WebGPU engine, read every card correctly, and took forty
+  seconds a frame where WebAssembly takes one: every frame past its
+  timeout, `ocrUnavailable` after a minute, on a machine that scanned
+  fine in 0.3. The WebGPU worker asks for the adapter itself and refuses a
+  fallback one, which hands over to WebAssembly in a few milliseconds.
+- The fallback from WebGPU to WebAssembly had only been covered by unit
+  tests in the app this came from, because no browser it tried failed the
+  WebGPU load. Headless Chromium has WebGPU on the page and no adapter
+  behind it, so it does. Driven through the example with the fake camera:
+  the WebGPU worker fails before it fetches anything, the WebAssembly one
+  reads the card, and four more scans on the same page never ask for the
+  WebGPU worker again. A missing WebGPU worker file and a software adapter
+  go the same way.
+- `tooSlow` was run the same way, with the worker's benchmark answer
+  replaced by 70 ms. The message is on screen in under a second, and only
+  the two worker scripts were fetched.
+- `fake_camera.js` handed every open the same stream. The scanner stops
+  the tracks it was given when it closes, so every scan after the first on
+  a page was looking at a camera already turned off. Each open gets a
+  stream of its own now.
+- The two builds agree. `ocr_compare.html` takes `?old=` and `?new=` and
+  was run both ways over its six cards at two sizes: the 0.3 worker
+  against the new WebAssembly one, and the WebAssembly build against the
+  WebGPU one on a software adapter. Twelve the same and none different
+  each time, text, confidence to the third decimal and boxes. A real GPU
+  may round the confidences differently, which is what `&text=1` is for.
+
+### Installer
+
+
+- `install_web` writes both workers and `ort-wasm-simd.jsep.wasm` from
+  `onnxruntime-web` 1.18.0, hash pinned like the rest. The folder is 51 MB
+  rather than 33. A browser fetches one runtime or the other, never both:
+  41 MB on WebGPU, 33 MB as before in WebAssembly.
+- It prints the Content-Security-Policy for both workers.
+- It asks for `Cache-Control: no-cache` on the folder. After a deploy,
+  phones kept running the previous worker: Firebase Hosting's default
+  `max-age=3600`, together with Flutter's service worker, kept the old
+  script through a reload and through unregistering the service worker.
+  A new page with an old worker is a pair nobody tested. `no-cache` still
+  lets the browser keep the files; it revalidates and gets a 304.
+
+### README
+
+
+- The two engines and how one is chosen; the iOS 27 slow state, what it
+  looks like and that WebGPU avoids it; frame times for both engines; the
+  policy for both workers; `no-cache` and why.
+
+### Not verified
+
+
+Everything above was run in desktop Chromium, headless, on a machine with
+no GPU. The iPhone numbers are the reporting app's, which runs the same
+models on the same runtime, not this package's.
+
+- This package on a real iPhone, on either engine. `doc/device-checklist.md`
+  has the steps.
+- WebGPU on iOS 26 and on Android Chrome.
+- Memory on the WebGPU engine in iOS WebKit. Its runtime is 8 MB bigger,
+  and the reporting app once lost a tab right after a WebGPU scan, in a
+  tab that had already loaded three engines.
+- What causes the slow state.
+
+### Housekeeping
+
+
+- Flutter 3.50 deprecates `package:flutter/material.dart` in favour of
+  `package:material_ui`, which is a second implementation rather than a
+  new name: its `Theme` is another class. A scanner built on it would not
+  see the theme of an app still built on the old one, so the package stays
+  where the apps are for now and says so at each import.
+
 ## 0.3.1
 
 No code changed. The package had stopped describing itself correctly.

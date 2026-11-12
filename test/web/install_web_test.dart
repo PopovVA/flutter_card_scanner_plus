@@ -87,11 +87,31 @@ void main() {
     });
   });
 
+  group('what is left for the app', () {
+    test('the policy is asked for on both workers', () {
+      for (final name in workerFiles) {
+        expect(completionNotice, contains(name));
+      }
+      expect(completionNotice, contains(workerContentSecurityPolicy));
+      expect(workerContentSecurityPolicy, contains("connect-src 'self'"));
+    });
+
+    test('revalidation is asked for, so an upgrade reaches a phone', () {
+      expect(completionNotice, contains('Cache-Control: no-cache'));
+    });
+  });
+
   group('the engine manifest', () {
-    test('installs one single-threaded ONNX runtime and no module glue', () {
+    test('installs a single-threaded ONNX runtime for each worker and no '
+        'module glue', () {
       final names = engine.expand((e) => e.outputs).toList();
 
       expect(names, contains('ort-wasm-simd.wasm'));
+      expect(
+        names,
+        contains('ort-wasm-simd.jsep.wasm'),
+        reason: 'the WebGPU worker asks for this one by name',
+      );
       expect(
         names.where((n) => n.contains('threaded')),
         isEmpty,
@@ -112,6 +132,26 @@ void main() {
       );
       expect(opencv.outputs, containsAll(['opencv.js', 'opencv.wasm']));
       expect(opencv.transform, isNotNull);
+    });
+
+    test('both workers are installed', () {
+      expect(workerFiles, ['card_ocr_worker.js', 'card_ocr_worker_webgpu.js']);
+      for (final name in workerFiles) {
+        expect(
+          File('assets/$name').existsSync(),
+          isTrue,
+          reason: '$name is committed, so an app never builds JavaScript',
+        );
+      }
+    });
+
+    test('the worker names agree with what the scanner asks for', () {
+      // The scanner's copy of these names lives in a file that only
+      // compiles for a browser, so it is read rather than imported.
+      final scanner = File('lib/src/web/ocr_worker.dart').readAsStringSync();
+      for (final name in workerFiles) {
+        expect(scanner, contains("'$name'"));
+      }
     });
 
     test('every entry pins a version and a hash', () {

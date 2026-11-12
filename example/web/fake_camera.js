@@ -49,16 +49,23 @@
   }
   paint();
 
-  const stream = canvas.captureStream(15);
-  // The scanner asks the track whether it has a torch, and a canvas track
-  // has no such thing. Saying so is the honest answer and the one that
-  // hides the button.
-  for (const track of stream.getVideoTracks()) {
-    track.getCapabilities = () => ({ width, height });
-    track.getSettings = () => ({ width, height });
+  // A stream of its own for every open. The scanner stops the tracks it
+  // was given when it closes, as it should, so handing out one stream for
+  // good left every scan after the first on a page looking at a camera
+  // that had already been turned off.
+  function open() {
+    const stream = canvas.captureStream(15);
+    // The scanner asks the track whether it has a torch, and a canvas
+    // track has no such thing. Saying so is the honest answer and the one
+    // that hides the button.
+    for (const track of stream.getVideoTracks()) {
+      track.getCapabilities = () => ({ width, height });
+      track.getSettings = () => ({ width, height });
+    }
+    return stream;
   }
 
-  navigator.mediaDevices.getUserMedia = async () => stream;
+  navigator.mediaDevices.getUserMedia = async () => open();
   // eslint-disable-next-line no-console
   console.log(`[fake camera] ${width}x${height}, card ${cardWidth}x${cardHeight}`);
 })();

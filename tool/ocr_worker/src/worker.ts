@@ -7,18 +7,39 @@
 // Everything the engine loads at run time, OpenCV, the ONNX runtime's
 // WebAssembly and the two models, is fetched from the folder this script
 // was loaded from. Nothing is fetched from a third party.
+//
+// This file is bundled twice. card_ocr_worker.js runs the models in
+// WebAssembly; card_ocr_worker_webgpu.js runs them on the GPU. build.mjs
+// points this import at `onnxruntime-web/webgpu` for the second one.
 import { env } from 'onnxruntime-web/wasm-core';
 
+import { benchmark } from './benchmark.js';
 import { type Quad } from './boxes.js';
 import { Detection } from './detection.js';
 import { pixelsOf } from './image.js';
 import { Recognition } from './recognition.js';
+import { prepareWebGpu } from './webgpu.js';
 
 declare const self: DedicatedWorkerGlobalScope & {
   cv?: { onRuntimeInitialized?: () => void };
 };
 
-type Request = { id: number; bitmap: ImageBitmap };
+/// What the page sends.
+///
+///   { load: true }       load the engine now, and say whether it did
+///   { benchmark: true }  time WebAssembly, without loading anything
+///   { id, bitmap }       read one frame
+///
+/// A frame loads the engine too if nothing has yet, so a page that only
+/// ever sends frames still works. The scanner asks first, because a load
+/// that fails is a different thing from a frame that fails: one means
+/// try the other build, the other means try the next frame.
+type Request = {
+  id?: number;
+  bitmap?: ImageBitmap;
+  load?: boolean;
+  benchmark?: boolean;
+};
 
 type Engine = { detection: Detection; recognition: Recognition };
 
@@ -54,6 +75,10 @@ function loadOpenCv(): Promise<void> {
 }
 
 async function load(): Promise<Engine> {
+  // Before anything is fetched: a browser without WebGPU in workers
+  // should find that out for the price of nothing.
+  if (__BACKEND__ === 'webgpu') await prepareWebGpu();
+
   await loadOpenCv();
 
   // The runtime's own files sit next to this script.
@@ -106,10 +131,37 @@ function normalize(
 }
 
 self.onmessage = async (event: MessageEvent<Request>) => {
-  const { id, bitmap } = event.data ?? ({} as Request);
+  const { id, bitmap, load: wantsLoad, benchmark: wantsBenchmark } =
+    event.data ?? ({} as Request);
+
+  if (wantsBenchmark) {
+    try {
+      self.postMessage({ benchmarkMs: benchmark() });
+    } catch (error) {
+      // No answer at all would leave the page waiting. A browser that
+      // cannot run 66 bytes of WebAssembly will fail the load next, and
+      // say why there.
+      self.postMessage({ benchmarkMs: null, benchmarkError: String(error) });
+    }
+    return;
+  }
+
+  if (wantsLoad) {
+    try {
+      engine ??= load();
+      await engine;
+      self.postMessage({ loaded: true, backend: __BACKEND__ });
+    } catch (error) {
+      engine = null;
+      self.postMessage({ loadError: String(error), backend: __BACKEND__ });
+    }
+    return;
+  }
+
   if (typeof id !== 'number') return;
 
   try {
+    if (!bitmap) throw new Error('A frame arrived without a picture');
     engine ??= load();
     const { detection, recognition } = await engine;
 
@@ -137,6 +189,7 @@ self.onmessage = async (event: MessageEvent<Request>) => {
   }
 };
 
-// The page waits for this before it sends a frame, so a worker that could
+// The page waits for this before it sends anything, so a worker that could
 // not even be fetched is a load failure rather than a silent stall.
-self.postMessage({ ready: true });
+// Nothing has been loaded yet: this only says the script ran.
+self.postMessage({ ready: true, backend: __BACKEND__ });

@@ -20,8 +20,9 @@ import '../core/card_scan_result.dart';
 class CardScannerStrings {
   /// Text for every state the scanner can be in: [alignCard],
   /// [lookingForExpiry], [lookingForName] and [lookingForNumber] while
-  /// scanning, then [permissionDenied], [cameraFailed] and [cameraBusy]
-  /// when it fails, with [retry] and [openSettings] on the buttons.
+  /// scanning, then [permissionDenied], [cameraFailed], [cameraBusy] and
+  /// [tooSlow] when it fails, with [retry] and [openSettings] on the
+  /// buttons.
   const CardScannerStrings({
     this.alignCard = 'Align the card inside the frame',
     this.lookingForExpiry = 'Number recognized. Looking for the expiry date',
@@ -35,6 +36,9 @@ class CardScannerStrings {
     this.openSettings = 'Open settings',
     this.cameraFailed = 'The camera could not be started.',
     this.cameraBusy = 'Another app is using the camera.',
+    this.tooSlow =
+        'Scanning is too slow in this browser right now. '
+        'Enter the card details by hand instead.',
     this.retry = 'Try again',
   });
 
@@ -67,6 +71,14 @@ class CardScannerStrings {
 
   /// The camera is held by another app.
   final String cameraBusy;
+
+  /// The browser runs the recognizer too slowly for a scan to finish, so
+  /// none was attempted. Web only.
+  ///
+  /// It points at a form because that is what helps: the state lasts until
+  /// the browser is restarted, and trying again on the same page usually
+  /// ends here again.
+  final String tooSlow;
 
   /// Button that tries the camera again.
   final String retry;
@@ -109,6 +121,7 @@ class CardScannerStrings {
     String? openSettings,
     String? cameraFailed,
     String? cameraBusy,
+    String? tooSlow,
     String? retry,
   }) => CardScannerStrings(
     alignCard: alignCard ?? this.alignCard,
@@ -119,6 +132,7 @@ class CardScannerStrings {
     openSettings: openSettings ?? this.openSettings,
     cameraFailed: cameraFailed ?? this.cameraFailed,
     cameraBusy: cameraBusy ?? this.cameraBusy,
+    tooSlow: tooSlow ?? this.tooSlow,
     retry: retry ?? this.retry,
   );
 }
