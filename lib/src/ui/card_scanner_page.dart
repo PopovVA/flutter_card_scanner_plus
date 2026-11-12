@@ -1,3 +1,9 @@
+// Flutter 3.50 deprecates this library for package:material_ui, which is
+// a second implementation and not a new name for this one. Its Theme is
+// another class, so a scanner built on it would not see the theme of an
+// app still built on this, and apps were asked to move only this month.
+// The scanner moves when the apps around it have.
+// ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 

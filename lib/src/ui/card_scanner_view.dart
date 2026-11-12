@@ -1,5 +1,8 @@
 import 'dart:math' as math;
 
+// Deprecated by Flutter 3.50 for package:material_ui. Kept until the
+// package itself moves: see lib/src/ui/card_scanner_page.dart.
+// ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 
 import '../channel/card_scanner_platform.dart';
