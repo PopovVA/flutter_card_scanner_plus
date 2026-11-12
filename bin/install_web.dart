@@ -4,10 +4,13 @@
 //
 //     dart run flutter_card_scanner_plus:install_web
 //
-// The files come to about 38 MB, which is why they are not shipped inside
+// The files come to about 51 MB, which is why they are not shipped inside
 // the package: every iOS and Android build would carry them for nothing.
 // They are fetched from npm at the versions pinned below, checked against
 // hashes recorded here, and written next to the app's index.html.
+//
+// A browser downloads less than is installed. There are two builds of the
+// ONNX runtime here, one for each worker, and a scan uses one of them.
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -15,8 +18,16 @@ import 'dart:typed_data';
 /// Folder created under the app's `web/`.
 const outputDirectory = 'flutter_card_scanner_plus';
 
-/// The worker bundle, which ships inside this package.
+/// The worker that runs the models in WebAssembly. It ships inside this
+/// package, and it is the one every browser can run.
 const workerFile = 'card_ocr_worker.js';
+
+/// The worker that runs the models on the GPU, built from the same
+/// sources. The scanner tries it first where the browser has WebGPU.
+const webGpuWorkerFile = 'card_ocr_worker_webgpu.js';
+
+/// Both workers, in the order they are written.
+const workerFiles = [workerFile, webGpuWorkerFile];
 
 /// One file the engine needs at run time.
 class EngineFile {
@@ -99,6 +110,19 @@ const engine = [
     sha512:
         '866358a04d466c0a334ea927bce02c2cf817623a5245c6cb8d1a60673747c8bd'
         '68ffc2f9285c1a36aa12d152b0fe056da7e1e4cac146b33d453828a2c808ae6c',
+  ),
+  // The same runtime with the WebGPU backend in it, for the WebGPU worker.
+  // Also single-threaded, so it asks for no shared memory either. It is
+  // 8 MB bigger than the one above, and a browser fetches one or the
+  // other, not both.
+  EngineFile(
+    package: 'onnxruntime-web',
+    version: '1.18.0',
+    path: 'dist/ort-wasm-simd.jsep.wasm',
+    name: 'ort-wasm-simd.jsep.wasm',
+    sha512:
+        'c8af1cfaec8cc355aebef97fcb3cbb25debea5e2beca4d5509dd110ea895ecb2'
+        '8ae28d056b6a228ba84175de2ed81c2fa49893edf2881c8a10ba41cbd16570a0',
   ),
   EngineFile(
     package: '@gutenye/ocr-models',
@@ -224,17 +248,19 @@ Future<int> main(List<String> arguments) async {
   final target = Directory('${web.path}/$outputDirectory');
   target.createSync(recursive: true);
 
-  final worker = _workerSource();
-  if (worker == null) {
-    stderr.writeln(
-      'Could not find $workerFile inside the package. A checkout of the '
-      'repository builds it with: cd tool/ocr_worker && npm install && '
-      'npm run build',
-    );
-    return 1;
+  for (final name in workerFiles) {
+    final worker = _workerSource(name);
+    if (worker == null) {
+      stderr.writeln(
+        'Could not find $name inside the package. A checkout of the '
+        'repository builds it with: cd tool/ocr_worker && npm install && '
+        'npm run build',
+      );
+      return 1;
+    }
+    worker.copySync('${target.path}/$name');
+    stdout.writeln('  $name  ${_size(worker.lengthSync())}');
   }
-  worker.copySync('${target.path}/$workerFile');
-  stdout.writeln('  $workerFile  ${_size(worker.lengthSync())}');
 
   final temporary = Directory.systemTemp.createTempSync('card_scanner_web');
   try {
@@ -250,23 +276,34 @@ Future<int> main(List<String> arguments) async {
     temporary.deleteSync(recursive: true);
   }
 
-  stdout.writeln(
-    '\nDone. Two things left, both in your app rather than here:\n'
+  stdout.writeln(completionNotice);
+  return 0;
+}
+
+/// The Content-Security-Policy both workers should be served with.
+const workerContentSecurityPolicy =
+    "default-src 'none'; script-src 'self' 'unsafe-eval' "
+    "'wasm-unsafe-eval'; connect-src 'self'";
+
+/// What is left for the app to do, printed after a successful install.
+const completionNotice =
+    '\nDone. Three things left, all in your hosting rather than here:\n'
     '\n'
     '  1. Serve web/$outputDirectory/ as it is. Nothing in it should be\n'
     '     renamed or inlined.\n'
-    '  2. Send a Content-Security-Policy with $workerFile:\n'
-    "       default-src 'none'; script-src 'self' 'unsafe-eval' "
-    "'wasm-unsafe-eval'; connect-src 'self'\n"
+    '  2. Send a Content-Security-Policy with both workers,\n'
+    '     $workerFile and $webGpuWorkerFile:\n'
+    '       $workerContentSecurityPolicy\n'
     "     'unsafe-eval' is required: OpenCV's bindings generate code.\n"
-    "     connect-src 'self' is what stops the worker, which sees pictures\n"
+    "     connect-src 'self' is what stops a worker, which sees pictures\n"
     '     of cards, from sending them anywhere.\n'
+    '  3. Send Cache-Control: no-cache for the whole folder. A phone that\n'
+    '     has scanned before otherwise keeps running the old worker after\n'
+    '     you upgrade this package. no-cache still lets the browser keep\n'
+    '     the files: it asks whether they changed and gets a 304.\n'
     '\n'
     'Add web/$outputDirectory/ to .gitignore and run this in CI instead of\n'
-    'committing 38 MB.',
-  );
-  return 0;
-}
+    'committing 51 MB.';
 
 const _usage =
     '''
@@ -281,13 +318,14 @@ each tarball against its own hash, and every extracted file is checked
 again against a hash pinned in this script.
 ''';
 
-/// The worker bundle inside this package, wherever pub put it.
-File? _workerSource() {
+/// The worker bundle called [name] inside this package, wherever pub put
+/// it.
+File? _workerSource(String name) {
   final candidates = <String>[
     // Resolved through the package config, which is how an app sees it.
-    ..._fromPackageConfig(),
+    ..._fromPackageConfig(name),
     // A checkout of the repository itself.
-    'assets/$workerFile',
+    'assets/$name',
   ];
   for (final candidate in candidates) {
     final file = File(candidate);
@@ -296,7 +334,7 @@ File? _workerSource() {
   return null;
 }
 
-Iterable<String> _fromPackageConfig() {
+Iterable<String> _fromPackageConfig(String name) {
   final config = File('.dart_tool/package_config.json');
   if (!config.existsSync()) return const [];
   // Read without a JSON dependency: the one entry needed is easy to find
@@ -319,7 +357,7 @@ Iterable<String> _fromPackageConfig() {
         .normalizePath()
         .toFilePath();
   }
-  return ['$root/assets/$workerFile'];
+  return ['$root/assets/$name'];
 }
 
 /// Whether every file [entry] produces is already on disk and intact.

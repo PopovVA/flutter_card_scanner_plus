@@ -103,6 +103,20 @@ void main() {
       expect(find.text(_strings.cameraFailed), findsOne);
     });
 
+    testWidgets('a browser too slow to scan in points at a form', (
+      tester,
+    ) async {
+      await openPage(tester);
+
+      // Reported by the engine after the camera opened, not by the start.
+      fake.fail(const CardScannerException(CardScannerException.tooSlow));
+      await tester.pumpAndSettle();
+
+      expect(find.text(_strings.tooSlow), findsOne);
+      expect(find.text(_strings.cameraFailed), findsNothing);
+      expect(find.byType(CloseButton), findsOne, reason: 'a way out');
+    });
+
     testWidgets('trying again opens the camera', (tester) async {
       fake.failStartWith = const CardScannerException(
         CardScannerException.permissionDenied,

@@ -34,7 +34,7 @@ export class Recognition {
     dictionaryPath: string,
   ): Promise<Recognition> {
     const [model, dictionary] = await Promise.all([
-      InferenceSession.create(modelPath, { executionProviders: ['wasm'] }),
+      InferenceSession.create(modelPath, { executionProviders: [__BACKEND__] }),
       fetch(dictionaryPath).then(async (response) => {
         if (!response.ok) throw new Error(`Could not read ${dictionaryPath}`);
         // The trailing space is the blank the model emits between words.

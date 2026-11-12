@@ -6,7 +6,9 @@
 <script>
 const out = document.getElementById('out');
 const log = (m) => { out.textContent += '\n' + m; };
-const file = new URLSearchParams(location.search).get('worker') || 'card_ocr_worker.js';
+const parameters = new URLSearchParams(location.search);
+const file = parameters.get('worker') || 'card_ocr_worker.js';
+const suffix = parameters.get('softwareGpu') === '1' ? '?softwareGpu=1' : '';
 
 function draw(width) {
   const height = Math.round(width * 600 / 960);
@@ -27,7 +29,7 @@ function draw(width) {
 
 (async () => {
   log('worker: ' + file);
-  const worker = new Worker('flutter_card_scanner_plus/' + file);
+  const worker = new Worker('flutter_card_scanner_plus/' + file + suffix);
   const answers = new Map();
   let ready;
   const started = new Promise((r) => { ready = r; });

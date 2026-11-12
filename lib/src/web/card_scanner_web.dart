@@ -9,6 +9,7 @@ import 'package:web/web.dart' as web;
 import '../channel/card_scanner_platform.dart';
 import '../core/recognized_text.dart';
 import 'js_await.dart';
+import 'ocr_engine.dart';
 import 'ocr_worker.dart';
 import 'scan_crop.dart';
 import 'scan_loop.dart';
@@ -20,7 +21,8 @@ import 'web_camera.dart';
 /// area under the guide, hand the lines to the same parser. What differs is
 /// everything underneath. There is no texture, so the preview is a
 /// `<video>` element shown through a platform view. There is no system OCR,
-/// so recognition runs in a Web Worker the app serves itself. And opening a
+/// so recognition runs in a Web Worker the app serves itself, on the GPU
+/// where the browser has WebGPU and in WebAssembly where not. And opening a
 /// camera can take arbitrarily long, because it waits on a permission
 /// prompt, so every open carries a token and a scan that was closed in the
 /// meantime closes the camera it was handed.
@@ -92,7 +94,7 @@ class CardScannerPlusWeb extends CardScannerPlatform {
     );
 
     _camera = camera;
-    final worker = _worker = OcrWorker(directory: engineDirectory);
+    final worker = _worker = _engine();
     final loop = _loop = ScanLoop(
       source: _CanvasFrames(camera),
       recognizer: worker,
@@ -188,7 +190,7 @@ class CardScannerPlusWeb extends CardScannerPlatform {
 
     // One-shot recognition borrows the running worker when there is one,
     // so a scan in progress does not pay to load a second engine.
-    final worker = _worker ?? OcrWorker(directory: engineDirectory);
+    final worker = _worker ?? _engine();
     try {
       final frame = await _CanvasFrames.cropBitmap(bitmap, crop);
       try {
@@ -196,6 +198,10 @@ class CardScannerPlusWeb extends CardScannerPlatform {
       } finally {
         frame.close();
       }
+    } on CardScannerException {
+      // Too slow to scan in is worth saying as it is: the caller's answer
+      // to it, a form, differs from its answer to a broken install.
+      rethrow;
     } catch (error) {
       throw const CardScannerException(
         'ocrUnavailable',
@@ -206,6 +212,11 @@ class CardScannerPlusWeb extends CardScannerPlatform {
       if (worker != _worker) await worker.dispose();
     }
   }
+
+  /// An engine that says which build it loaded to anyone listening on
+  /// `CardScanner.engineReports`.
+  OcrWorker _engine() =>
+      OcrWorker(directory: engineDirectory, onReport: OcrEngineReports.add);
 
   CameraHandle? _handleFor(WebCamera camera, int session) {
     final width = camera.width;

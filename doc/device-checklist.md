@@ -67,6 +67,12 @@ is what only hardware can answer.
 | Step | Expected |
 |---|---|
 | iOS Safari and Android Chrome, scan a card | Reads it; the first frame takes a second or two while the engine loads |
+| The same, with the example's engine line in view after the scan | It names the engine: WebGPU where the browser has it, WebAssembly where not |
+| iOS 27, iOS 26, and an iOS without WebGPU, 18 or older | 27 and 26 read on WebGPU; the old one falls back to WebAssembly and reads |
+| Android Chrome | Reads, on whichever engine it reports. WebGPU there has not been tried by anyone yet |
+| Open and close the scanner five times in a row | Every open reads, the engine line stays the same, and the tab survives. Watch memory on the WebGPU engine: its runtime is 8 MB bigger and nobody has measured it in iOS WebKit |
+| An iPhone in the iOS 27 slow state, if you can find one: the engine line shows a benchmark of 55 ms or more | On WebGPU it reads at about a second a frame. With WebGPU switched off in Safari's feature flags it says scanning is too slow, at once, with no minute of waiting |
+| Deploy a build with a new version of the package to a phone that has scanned before | It runs the new workers without clearing anything, provided the folder is served `Cache-Control: no-cache` |
 | Close the scanner while the permission prompt is up, then answer it | The camera never turns on: no indicator, no green dot |
 | Send the browser to the background while the camera is opening, come back | One camera, not two, and the preview returns |
 | Turn the phone sideways | Preview and guide both follow, and the card still reads |

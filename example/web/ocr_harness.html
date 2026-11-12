@@ -34,23 +34,65 @@ function drawCard() {
   const canvas = drawCard();
   log('card drawn ' + canvas.width + 'x' + canvas.height);
 
-  const worker = new Worker('flutter_card_scanner_plus/card_ocr_worker.js');
+  // ?worker=card_ocr_worker_webgpu.js runs the WebGPU build instead, and
+  // &softwareGpu=1 lets it run on a software adapter, which it otherwise
+  // refuses: correct there, and most of a minute per frame.
+  const parameters = new URLSearchParams(location.search);
+  const file = parameters.get('worker') || 'card_ocr_worker.js';
+  const suffix = parameters.get('softwareGpu') === '1' ? '?softwareGpu=1' : '';
+  log('worker: ' + file);
+  const worker = new Worker('flutter_card_scanner_plus/' + file + suffix);
   const started = performance.now();
-  let readyAt = 0;
 
   worker.onerror = (e) => log('WORKER ERROR ' + (e.message || e.type));
 
+  // Replies to a frame are matched by id. The three other things a worker
+  // says, that it started, how fast WebAssembly is and whether the engine
+  // loaded, each have one waiter at a time.
   const answers = new Map();
+  const once = (key) => new Promise((r) => answers.set(key, r));
+  const ready = once('ready');
   worker.onmessage = (e) => {
     const d = e.data || {};
-    if (d.ready) { readyAt = performance.now(); log('worker ready in ' + Math.round(readyAt - started) + ' ms'); return; }
-    const settle = answers.get(d.id);
-    if (settle) { answers.delete(d.id); settle(d); }
+    const key = d.ready ? 'ready'
+      : 'benchmarkMs' in d ? 'benchmark'
+      : (d.loaded || d.loadError) ? 'load'
+      : d.id;
+    const settle = answers.get(key);
+    if (settle) { answers.delete(key); settle(d); }
   };
+
+  const hello = await ready;
+  log('worker ready in ' + Math.round(performance.now() - started) + ' ms, backend ' + hello.backend);
+
+  // The same three steps the scanner takes: time WebAssembly, load the
+  // engine, time it again, and only then send a frame.
+  const benchmark = async (when) => {
+    const waiting = once('benchmark');
+    worker.postMessage({ benchmark: true });
+    const reply = await waiting;
+    log('benchmark ' + when + ': ' + (reply.benchmarkMs == null
+      ? 'FAILED ' + reply.benchmarkError
+      : reply.benchmarkMs.toFixed(1) + ' ms'));
+  };
+
+  await benchmark('before the load');
+  const loadStarted = performance.now();
+  const loading = once('load');
+  worker.postMessage({ load: true });
+  const loaded = await loading;
+  const loadTook = Math.round(performance.now() - loadStarted);
+  if (loaded.loadError) {
+    log('LOAD FAILED after ' + loadTook + ' ms: ' + loaded.loadError);
+    log('DONE');
+    return;
+  }
+  log('engine loaded in ' + loadTook + ' ms, backend ' + loaded.backend);
+  await benchmark('after the load');
 
   const recognize = async (id) => {
     const bitmap = await createImageBitmap(canvas);
-    const answer = new Promise((r) => answers.set(id, r));
+    const answer = once(id);
     worker.postMessage({ id, bitmap }, [bitmap]);
     return answer;
   };

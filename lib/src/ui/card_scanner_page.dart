@@ -230,6 +230,7 @@ class _CardScannerPageState extends State<CardScannerPage> {
     final message = switch (error.code) {
       CardScannerException.permissionDenied => strings.permissionDenied,
       CardScannerException.cameraInterrupted => strings.cameraBusy,
+      CardScannerException.tooSlow => strings.tooSlow,
       _ => strings.cameraFailed,
     };
 

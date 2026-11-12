@@ -13,8 +13,8 @@ class CardScannerException implements Exception {
   const CardScannerException(this.code, [this.message]);
 
   /// One of [permissionDenied], [noCamera], [cameraError],
-  /// [alreadyRunning], [cameraInterrupted], [cameraDetached], [cancelled]
-  /// or a platform-specific code.
+  /// [alreadyRunning], [cameraInterrupted], [cameraDetached], [cancelled],
+  /// [tooSlow] or a platform-specific code.
   final String code;
 
   /// What the platform said about it, when it said anything. Useful in a
@@ -43,6 +43,17 @@ class CardScannerException implements Exception {
   /// A start that was stopped before it finished opening. Not a failure:
   /// the controller swallows it.
   static const cancelled = 'cancelled';
+
+  /// The browser runs WebAssembly too slowly for a scan to finish, so none
+  /// was attempted (web).
+  ///
+  /// Some iOS 27 Safari processes run WebAssembly about fifteen times
+  /// slower than normal until Safari is restarted. A frame then takes ten
+  /// to twenty seconds, and a scan neither reads the card nor fails. The
+  /// scanner times a short loop before it sends a frame and reports this
+  /// instead, so the person can be offered a form straight away. Trying
+  /// again on the same page will usually say the same.
+  static const tooSlow = 'tooSlow';
 
   /// Whether this is [permissionDenied], which is the one error worth its
   /// own screen: it is the user's to resolve, not the app's.

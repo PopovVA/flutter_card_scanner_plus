@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 // Deprecated by Flutter 3.50 for package:material_ui. Kept until the
 // package itself moves: see lib/src/ui/card_scanner_page.dart.
@@ -30,6 +32,26 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   CardScanResult? _result;
+
+  /// Which build of the browser engine the last scan loaded. Always
+  /// `null` on a phone, where the system's own engine does the reading.
+  OcrEngineReport? _engine;
+  StreamSubscription<OcrEngineReport>? _engineReports;
+
+  @override
+  void initState() {
+    super.initState();
+    _engineReports = CardScanner.engineReports.listen((report) {
+      debugPrint('$report');
+      if (mounted) setState(() => _engine = report);
+    });
+  }
+
+  @override
+  void dispose() {
+    _engineReports?.cancel();
+    super.dispose();
+  }
 
   Future<void> _scan({
     required ScanRequirements requirements,
@@ -66,9 +88,27 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  /// One line saying which engine ran and how it went.
+  static String _describe(OcrEngineReport report) {
+    final name = switch (report.backend) {
+      OcrBackend.webGpu => 'WebGPU',
+      OcrBackend.wasm => 'WebAssembly',
+    };
+    final benchmark = report.benchmark;
+    final loadTime = report.loadTime;
+    return [
+      'Engine: $name',
+      if (loadTime != null) 'loaded in ${loadTime.inMilliseconds} ms',
+      if (benchmark != null) 'benchmark ${benchmark.inMilliseconds} ms',
+      if (report.tooSlow) 'too slow to scan',
+      if (report.webGpuFailure != null) 'WebGPU was not usable',
+    ].join(', ');
+  }
+
   @override
   Widget build(BuildContext context) {
     final r = _result;
+    final engine = _engine;
     return Scaffold(
       appBar: AppBar(title: const Text('flutter_card_scanner_plus')),
       body: Padding(
@@ -125,6 +165,14 @@ class _HomePageState extends State<HomePage> {
               label: const Text('Scan from photo'),
             ),
             const SizedBox(height: 32),
+            if (engine != null) ...[
+              Text(
+                _describe(engine),
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 12),
+            ],
             if (r == null)
               const Text('No card scanned yet', textAlign: TextAlign.center)
             else

@@ -29,7 +29,7 @@ export class Detection {
 
   static async load(path: string): Promise<Detection> {
     return new Detection(
-      await InferenceSession.create(path, { executionProviders: ['wasm'] }),
+      await InferenceSession.create(path, { executionProviders: [__BACKEND__] }),
     );
   }
 
