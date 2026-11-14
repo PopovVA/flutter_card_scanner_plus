@@ -1,3 +1,51 @@
+## 0.4.0
+
+macOS is a supported platform. Same Vision request as iOS, same parser,
+same voting; a different camera underneath, which is the part worth
+reading about.
+
+### Added
+
+- **macOS.** `macos/` carries a native plugin built on AVFoundation and
+  Vision, delivering frames to Flutter as a texture the same way iOS does.
+  Minimum deployment target is 10.15 with CocoaPods, 12.0 with Swift
+  Package Manager, which is Flutter's own floor there.
+- **A camera to choose.** A Mac has no obviously right camera, so the
+  plugin ranks what it finds and opens the best: Continuity Camera (an
+  iPhone used as the webcam), then an external webcam, then the one above
+  the screen, which focuses at about arm's length and reads a hand-held
+  card poorly. `CardScannerController.listCameras()` returns the ranked
+  list as `CameraDescription`s and `useCamera(id)` switches between them,
+  reopening a running camera and keeping the result so far.
+- `CameraHandle.cameraId` says which camera actually opened. A webcam that
+  was unplugged between the pick and the start falls back to the
+  platform's own choice rather than failing the scan.
+- The example app has a macOS target, and CI builds it.
+
+### Fixed
+
+- `CameraHandle.torchAvailable` was read from the channel by
+  `CameraHandle.fromMap` but thrown away by `start`, so a native platform
+  always reported a torch. macOS has none and says so, which is what hides
+  the button on the default screen; iOS and Android are unaffected, since
+  saying nothing still means yes.
+
+### Changed
+
+- `CardScannerPlatform.start` takes an optional `cameraId`, and the
+  interface gained `listCameras`, which answers an empty list by default.
+  Only a custom implementation of that interface — a test fake, usually —
+  needs updating, and only for `start`'s signature.
+
+### Not on macOS
+
+- No torch: `setTorch` is accepted and does nothing, so shared code does
+  not have to branch on the platform.
+- No NFC: CoreNFC is iOS only, so `isAvailable()` answers `false` and the
+  rest fails with `nfcUnavailable`.
+- No rotation: a Mac window does not turn, so the preview keeps the shape
+  it had at `start` and no preview update is emitted.
+
 ## 0.3.1
 
 No code changed. The package had stopped describing itself correctly.

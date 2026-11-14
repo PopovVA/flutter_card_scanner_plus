@@ -63,6 +63,20 @@ jobs:
       - run: flutter build ios --debug --no-codesign
         working-directory: example
 
+  macos:
+    name: Build example (macOS)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+        working-directory: example
+      - run: flutter build macos --debug
+        working-directory: example
+
   web:
     name: Build example (web)
     runs-on: ubuntu-latest

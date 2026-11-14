@@ -53,18 +53,88 @@ class CardScannerException implements Exception {
       'CardScannerException($code${message == null ? '' : ': $message'})';
 }
 
+/// What kind of camera a [CameraDescription] names, which is really a
+/// statement about how well it can read a card.
+enum CameraKind {
+  /// An iPhone used as a webcam over Continuity Camera. The same back
+  /// camera the iOS implementation uses, and by far the best a Mac has.
+  continuityCamera,
+
+  /// A webcam plugged in or connected over the network. Can at least be
+  /// pointed at a card lying on the desk.
+  external,
+
+  /// A camera built into the machine, such as the one above a MacBook's
+  /// screen. Fixed at about arm's length, which is further than a card
+  /// wants to be held.
+  builtIn;
+
+  /// Reads the channel's spelling, falling back to [external] for a kind
+  /// added after this version.
+  static CameraKind fromName(String? name) => switch (name) {
+    'continuity' => CameraKind.continuityCamera,
+    'builtIn' => CameraKind.builtIn,
+    _ => CameraKind.external,
+  };
+}
+
+/// One camera the platform could open, from [CardScannerPlatform.listCameras].
+@immutable
+class CameraDescription {
+  /// A camera the platform knows as [id], shown to a person as [name], of
+  /// kind [kind].
+  const CameraDescription({
+    required this.id,
+    required this.name,
+    this.kind = CameraKind.external,
+  });
+
+  /// Opaque platform identifier, to pass back as
+  /// `CardScannerPlatform.start(cameraId: ...)`.
+  final String id;
+
+  /// What the system calls this camera, e.g. "FaceTime HD Camera".
+  /// Already localized; show it as it is.
+  final String name;
+
+  /// How promising this camera is for reading a card.
+  final CameraKind kind;
+
+  /// Reads a description from a platform channel [map].
+  factory CameraDescription.fromMap(Map<Object?, Object?> map) =>
+      CameraDescription(
+        id: map['id']! as String,
+        name: map['name'] as String? ?? '',
+        kind: CameraKind.fromName(map['kind'] as String?),
+      );
+
+  @override
+  bool operator ==(Object other) =>
+      other is CameraDescription &&
+      other.id == id &&
+      other.name == name &&
+      other.kind == kind;
+
+  @override
+  int get hashCode => Object.hash(id, name, kind);
+
+  @override
+  String toString() => 'CameraDescription($id, $name, ${kind.name})';
+}
+
 /// Returned by [CardScannerPlatform.start].
 @immutable
 class CameraHandle {
   /// A preview of [previewWidth] by [previewHeight] pixels, drawn from
-  /// [textureId] and needing [rotation] degrees to stand upright, on a
-  /// camera that has a torch when [torchAvailable].
+  /// [textureId] and needing [rotation] degrees to stand upright, on the
+  /// camera [cameraId], which has a torch when [torchAvailable].
   const CameraHandle({
     required this.textureId,
     required this.previewWidth,
     required this.previewHeight,
     this.rotation = 0,
     this.torchAvailable = true,
+    this.cameraId,
   });
 
   /// Texture to render with `Texture(textureId: ...)`.
@@ -90,6 +160,11 @@ class CameraHandle {
   /// the device decide, so they report `true`.
   final bool torchAvailable;
 
+  /// Which camera this preview is coming from, on a platform that has
+  /// more than one worth choosing between (macOS). `null` everywhere
+  /// else, where the platform picks and there is nothing to pick from.
+  final String? cameraId;
+
   /// [rotation] as quarter turns, ready for a `RotatedBox`.
   int get quarterTurns => (rotation ~/ 90) % 4;
 
@@ -104,6 +179,7 @@ class CameraHandle {
     previewHeight: (map['previewHeight'] as num).toInt(),
     rotation: (map['rotation'] as num?)?.toInt() ?? 0,
     torchAvailable: map['torchAvailable'] as bool? ?? true,
+    cameraId: map['cameraId'] as String?,
   );
 
   @override
@@ -113,7 +189,8 @@ class CameraHandle {
       other.previewWidth == previewWidth &&
       other.previewHeight == previewHeight &&
       other.rotation == rotation &&
-      other.torchAvailable == torchAvailable;
+      other.torchAvailable == torchAvailable &&
+      other.cameraId == cameraId;
 
   @override
   int get hashCode => Object.hash(
@@ -122,6 +199,7 @@ class CameraHandle {
     previewHeight,
     rotation,
     torchAvailable,
+    cameraId,
   );
 
   @override
@@ -134,8 +212,22 @@ abstract class CardScannerPlatform {
   /// The implementation the package uses. Assign a fake in tests.
   static CardScannerPlatform instance = MethodChannelCardScannerPlatform();
 
+  /// The cameras worth offering a choice between, best first.
+  ///
+  /// Empty on every platform that has one obvious camera and picks it
+  /// itself — a phone's back camera, the browser's facing-mode choice.
+  /// Only macOS answers with a list, because a Mac genuinely has no
+  /// obvious answer: see [CameraKind].
+  Future<List<CameraDescription>> listCameras() async =>
+      const <CameraDescription>[];
+
   /// Opens the camera and starts OCR. Throws [CardScannerException].
-  Future<CameraHandle> start({TextBox? regionOfInterest});
+  ///
+  /// [cameraId] names one of [listCameras]; leave it out to let the
+  /// platform choose. A camera that has since gone away is not an error:
+  /// the platform falls back to its own choice, and the handle says which
+  /// one it opened.
+  Future<CameraHandle> start({TextBox? regionOfInterest, String? cameraId});
 
   /// Closes the camera and releases the preview.
   ///
@@ -208,17 +300,43 @@ class MethodChannelCardScannerPlatform implements CardScannerPlatform {
   Stream<Map<Object?, Object?>>? _raw;
 
   @override
-  Future<CameraHandle> start({TextBox? regionOfInterest}) async {
+  Future<List<CameraDescription>> listCameras() async {
+    try {
+      final reply = await _methods.invokeListMethod<Object?>('listCameras');
+      return (reply ?? const <Object?>[])
+          .whereType<Map<Object?, Object?>>()
+          .map(CameraDescription.fromMap)
+          .toList(growable: false);
+    } on MissingPluginException {
+      // iOS and Android do not implement this method, and should not have
+      // to: they have one camera for this job and open it themselves.
+      return const <CameraDescription>[];
+    } on PlatformException catch (e) {
+      throw CardScannerException(e.code, e.message);
+    }
+  }
+
+  @override
+  Future<CameraHandle> start({
+    TextBox? regionOfInterest,
+    String? cameraId,
+  }) async {
     try {
       final reply = await _methods.invokeMapMethod<String, Object?>('start', {
         if (regionOfInterest != null)
           'regionOfInterest': regionOfInterest.toMap(),
+        'cameraId': ?cameraId,
       });
       return CameraHandle(
         textureId: reply!['textureId'] as int,
         previewWidth: (reply['previewWidth'] as num).toInt(),
         previewHeight: (reply['previewHeight'] as num).toInt(),
         rotation: (reply['rotation'] as num?)?.toInt() ?? 0,
+        // iOS and Android say nothing and mean yes: they hand the request
+        // to the device and let it decide. macOS has no torch at all and
+        // says so, which is what hides the button.
+        torchAvailable: reply['torchAvailable'] as bool? ?? true,
+        cameraId: reply['cameraId'] as String?,
       );
     } on PlatformException catch (e) {
       throw CardScannerException(e.code, e.message);

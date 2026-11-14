@@ -144,3 +144,36 @@ nothing. Whatever this is, it sits below the plugin: no plugin code runs
 between the session becoming active and the timeout. Before suspecting
 the plugin again, check the same cards with an unrelated NFC reader on
 the same phone.
+
+## macOS
+
+A Mac fails differently from a phone: the camera is wrong rather than
+absent, and the sandbox is what stops it rather than a permission dialog.
+Run these on a MacBook with an iPhone nearby, so both cameras are
+available.
+
+```bash
+cd example && flutter run -d macos --release
+```
+
+| Step | Expected |
+|---|---|
+| Open the example with an iPhone unlocked and nearby | The camera picker lists it first, as `continuity`, and that is what the scan opens |
+| Scan a card on that camera | Reads about as fast as the same card on the phone itself |
+| Pick the built-in camera and scan the same card | Reads, slowly. If it never reads at all, the near-field problem is worse than assumed and the ranking is not enough |
+| Pick a camera, start a scan, then switch cameras from the picker | The preview reopens on the new camera; fields found so far are kept |
+| Unplug a USB webcam that was selected, then scan | Falls back to another camera rather than failing; `CameraHandle.cameraId` names the one that opened |
+| Walk the iPhone out of range mid scan | `cameraDetached` reaches the error screen rather than freezing the preview |
+| Look at the default scanner screen | No torch button at all |
+| Resize the window narrow, then very wide | The preview still fills the guide the way `BoxFit.cover` would, and the region of interest follows |
+| Open and close the scanner fifteen times quickly | Every open shows a preview, never black |
+| Call `CardNfcReader.isAvailable()` | `false`, and the app keeps working |
+
+Two setup mistakes look like plugin bugs:
+
+- Without `com.apple.security.device.camera` in **both** entitlements
+  files, a sandboxed app gets `permissionDenied` with no dialog ever
+  shown. The release build is the one that gets forgotten.
+- Without `NSCameraUsageDescription` in `Info.plist`, the app is killed
+  the moment `AVCaptureDevice.requestAccess` is called, which reads as a
+  crash rather than a refusal.

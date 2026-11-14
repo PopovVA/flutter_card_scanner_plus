@@ -28,6 +28,29 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   CardScanResult? _result;
 
+  /// Empty everywhere but macOS, where a Mac has several cameras and no
+  /// obviously right one. The picker below appears only when there is
+  /// something to pick.
+  List<CameraDescription> _cameras = const [];
+  String? _cameraId;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCameras();
+  }
+
+  Future<void> _loadCameras() async {
+    final cameras = await CardScannerPlatform.instance.listCameras();
+    if (!mounted || cameras.isEmpty) return;
+    // The list is ranked, so the first is the one the plugin would have
+    // opened anyway.
+    setState(() {
+      _cameras = cameras;
+      _cameraId = cameras.first.id;
+    });
+  }
+
   Future<void> _scan({
     required ScanRequirements requirements,
     bool enableHaptics = false,
@@ -36,6 +59,7 @@ class _HomePageState extends State<HomePage> {
       context,
       requirements: requirements,
       title: 'Scan card',
+      cameraId: _cameraId,
       enableHaptics: enableHaptics,
       // A real app would call permission_handler's openAppSettings here.
       onOpenSettings: () => ScaffoldMessenger.of(context).showSnackBar(
@@ -120,11 +144,29 @@ class _HomePageState extends State<HomePage> {
     final r = _result;
     return Scaffold(
       appBar: AppBar(title: const Text('flutter_card_scanner_plus')),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (_cameras.isNotEmpty) ...[
+              DropdownButtonFormField<String>(
+                initialValue: _cameraId,
+                decoration: const InputDecoration(
+                  labelText: 'Camera',
+                  border: OutlineInputBorder(),
+                ),
+                items: [
+                  for (final camera in _cameras)
+                    DropdownMenuItem(
+                      value: camera.id,
+                      child: Text('${camera.name} · ${camera.kind.name}'),
+                    ),
+                ],
+                onChanged: (id) => setState(() => _cameraId = id),
+              ),
+              const SizedBox(height: 16),
+            ],
             FilledButton.icon(
               // A browser reads about one frame a second rather than
               // eight, so it votes on fewer of them.

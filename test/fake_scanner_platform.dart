@@ -13,6 +13,13 @@ class FakeScannerPlatform implements CardScannerPlatform {
   final _previews = StreamController<CameraHandle>.broadcast();
   final _errors = StreamController<CardScannerException>.broadcast();
   final regions = <TextBox>[];
+
+  /// Which camera each start asked for, `null` for the platform's own
+  /// choice.
+  final cameraIds = <String?>[];
+
+  /// What [listCameras] answers.
+  List<CameraDescription> cameras = const [];
   bool started = false;
   int starts = 0;
   int stops = 0;
@@ -37,8 +44,12 @@ class FakeScannerPlatform implements CardScannerPlatform {
   void fail(CardScannerException error) => _errors.add(error);
 
   @override
-  Future<CameraHandle> start({TextBox? regionOfInterest}) async {
+  Future<CameraHandle> start({
+    TextBox? regionOfInterest,
+    String? cameraId,
+  }) async {
     starts++;
+    cameraIds.add(cameraId);
     final hold = holdStart;
     if (hold != null) await hold.future;
     final failure = failStartWith;
@@ -57,6 +68,9 @@ class FakeScannerPlatform implements CardScannerPlatform {
     if (hold != null) await hold.future;
     started = false;
   }
+
+  @override
+  Future<List<CameraDescription>> listCameras() async => cameras;
 
   @override
   Future<void> setTorch(bool enabled) async {}

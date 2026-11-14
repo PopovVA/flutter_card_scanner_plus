@@ -68,7 +68,12 @@ class CardScannerPlusWeb extends CardScannerPlatform {
   Stream<CardScannerException> get errors => _errors.stream;
 
   @override
-  Future<CameraHandle> start({TextBox? regionOfInterest}) async {
+  Future<CameraHandle> start({
+    TextBox? regionOfInterest,
+    // The browser picks the camera through `facingMode`, and never
+    // offers the list a Mac does, so there is nothing to name here.
+    String? cameraId,
+  }) async {
     if (_camera != null) {
       throw const CardScannerException(CardScannerException.alreadyRunning);
     }

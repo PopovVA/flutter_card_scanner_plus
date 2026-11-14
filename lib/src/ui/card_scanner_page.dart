@@ -19,11 +19,13 @@ class CardScannerPage extends StatefulWidget {
   /// A scanner page applying [requirements], titled [title], drawing
   /// [overlayBuilder] over the preview, with controls in
   /// [foregroundColor], text from [strings], an [onOpenSettings] hook and
-  /// haptics when [enableHaptics] is set.
+  /// haptics when [enableHaptics] is set, reading from the camera
+  /// [cameraId].
   const CardScannerPage({
     super.key,
     this.requirements = ScanRequirements.standard,
     this.title,
+    this.cameraId,
     this.overlayBuilder,
     this.foregroundColor,
     this.strings = CardScannerStrings.defaults,
@@ -33,6 +35,11 @@ class CardScannerPage extends StatefulWidget {
 
   /// Which fields the scan waits for.
   final ScanRequirements requirements;
+
+  /// Which camera to open, from
+  /// [CardScannerController.listCameras]. `null` lets the platform
+  /// choose, which is the only option anywhere but macOS.
+  final String? cameraId;
 
   /// Shown in the app bar. No title at all when `null`.
   final String? title;
@@ -67,6 +74,7 @@ class CardScannerPage extends StatefulWidget {
     BuildContext context, {
     ScanRequirements requirements = ScanRequirements.standard,
     String? title,
+    String? cameraId,
     CardScannerOverlayBuilder? overlayBuilder,
     Color? foregroundColor,
     CardScannerStrings strings = CardScannerStrings.defaults,
@@ -78,6 +86,7 @@ class CardScannerPage extends StatefulWidget {
       builder: (_) => CardScannerPage(
         requirements: requirements,
         title: title,
+        cameraId: cameraId,
         overlayBuilder: overlayBuilder,
         foregroundColor: foregroundColor,
         strings: strings,
@@ -94,6 +103,7 @@ class CardScannerPage extends StatefulWidget {
 class _CardScannerPageState extends State<CardScannerPage> {
   late final CardScannerController _controller = CardScannerController(
     requirements: widget.requirements,
+    cameraId: widget.cameraId,
   );
 
   bool _closing = false;

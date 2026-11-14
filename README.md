@@ -6,15 +6,15 @@
   <a href="https://pub.dev/packages/flutter_card_scanner_plus"><img src="https://img.shields.io/pub/v/flutter_card_scanner_plus.svg?label=pub&color=blue" alt="pub version"></a>
   <a href="https://github.com/PopovVA/flutter_card_scanner_plus/actions/workflows/ci.yml"><img src="https://github.com/PopovVA/flutter_card_scanner_plus/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/PopovVA/flutter_card_scanner_plus/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT"></a>
-  <img src="https://img.shields.io/badge/platforms-iOS%20%7C%20Android%20%7C%20Web-lightgrey.svg" alt="platforms">
+  <img src="https://img.shields.io/badge/platforms-iOS%20%7C%20Android%20%7C%20macOS%20%7C%20Web-lightgrey.svg" alt="platforms">
   <a href="https://buymeacoffee.com/LeonRedfield"><img src="https://img.shields.io/badge/Buy%20me%20a%20coffee-support-FFDD00?logo=buymeacoffee&logoColor=black" alt="Buy me a coffee"></a>
 </p>
 
-Scan a payment card with the camera and get its number, expiry date and cardholder name back as a typed result. Recognition runs fully on the device using the platform OCR engines: Vision on iOS, ML Kit on Android, and PaddleOCR through WebAssembly in a browser. There is no third party camera plugin, no cloud service and no network access.
+Scan a payment card with the camera and get its number, expiry date and cardholder name back as a typed result. Recognition runs fully on the device using the platform OCR engines: Vision on iOS and macOS, ML Kit on Android, and PaddleOCR through WebAssembly in a browser. There is no third party camera plugin, no cloud service and no network access.
 
 Supported networks: **Visa**, **Mastercard**, **American Express**, **Discover**, **JCB**, **Diners Club**, **UnionPay**.
 
-Platforms: **iOS**, **Android** and **web**.
+Platforms: **iOS**, **Android**, **macOS** and **web**.
 
 ## Highlights
 
@@ -50,6 +50,30 @@ Minimum deployment target is iOS 15.
 ### Android
 
 Nothing to configure. The plugin declares the `CAMERA` permission and requests it at runtime. Minimum SDK is 24 (Android 7.0). The ML Kit text recognition model is bundled with the app, so scanning works offline and does not depend on Google Play Services being up to date.
+
+### macOS
+
+Add a camera usage description to `macos/Runner/Info.plist`:
+
+```xml
+<key>NSCameraUsageDescription</key>
+<string>The camera is used to scan your payment card.</string>
+```
+
+and the camera entitlement to **both** `macos/Runner/DebugProfile.entitlements` and
+`macos/Runner/Release.entitlements`:
+
+```xml
+<key>com.apple.security.device.camera</key>
+<true/>
+```
+
+Minimum deployment target is macOS 10.15 with CocoaPods, 12.0 with Swift
+Package Manager, which is Flutter's own floor there.
+
+Recognition is the same Vision request iOS runs, on the same accurate
+revision. What differs is the camera, and it is worth knowing before you
+ship: see [Choosing a camera on macOS](#choosing-a-camera-on-macos).
 
 ## Quick start
 
@@ -262,6 +286,50 @@ CardScannerPage.show(
 
 `CardScannerStrings` holds every string the scanner can show, with English defaults. `onOpenSettings` is a callback rather than a dependency, so this package does not pull a permissions plugin into your app; leave it out and no such button is offered. The close button is always reachable, including on the error screen.
 
+## Choosing a camera on macOS
+
+A phone has one obvious camera for this job and the plugin opens it. A Mac
+does not, and the difference decides whether a scan works at all.
+
+The built-in FaceTime camera sits above the screen and focuses at about
+arm's length. A card held where that camera can see it is small in the
+frame, lit from behind by the screen, and usually tilted. It reads, but it
+takes several seconds and misreads the embossed digits more often than a
+phone does. **Continuity Camera** — an iPhone used as the Mac's webcam,
+macOS 13 and later — is the same back camera the iOS implementation uses,
+and it reads a card about as well.
+
+So the plugin ranks what it finds and opens the best one: Continuity
+first, then an external webcam, then the built-in camera. An app that does
+nothing gets that choice. To offer a picker instead, ask the controller:
+
+```dart
+final cameras = await controller.listCameras();
+// [CameraDescription(id, name, kind)], best first; empty off macOS.
+
+await controller.useCamera(cameras.first.id);
+// Reopens the camera if one is running, keeping the result so far.
+```
+
+`CameraKind` is what the ranking is based on — `continuityCamera`,
+`external` or `builtIn` — and is worth showing next to the name, because
+"iPhone" alone does not tell a person it is the one that will work.
+`CameraHandle.cameraId` says which camera actually opened, which is not
+always the one you asked for: a webcam that has been unplugged falls back
+to the platform's own choice rather than failing the scan.
+
+Two things the Mac does not have, and the plugin reports rather than
+pretends:
+
+- **No torch.** `start` answers `torchAvailable: false`, which is what
+  removes the button from the default screen. `setTorch` is accepted and
+  does nothing, so shared code does not have to branch.
+- **No NFC.** CoreNFC is iOS only. `CardNfcProbe.isAvailable()` answers
+  `false`; everything else fails with `nfcUnavailable`.
+
+There is also no rotation: a Mac window does not turn, so the preview keeps
+the shape it had at `start` and no preview update is ever emitted.
+
 ## The web
 
 The scanner runs in a browser too. Same frame, same voting, same parser;
@@ -407,6 +475,9 @@ That is the whole point of how it is wired:
   makes unavoidable from a plugin. That costs nothing: the framework ships on
   every iOS 13 and later device, and without the entitlement, which only the
   app itself can add, the API cannot open a session.
+- On macOS and the web there is no NFC at all. `isAvailable()` answers
+  `false` rather than throwing, so an app can offer the NFC path where it
+  exists and hide it where it does not, without branching on the platform.
 
 ### Android setup
 
@@ -568,6 +639,7 @@ Everything in step 4 and 5 is plain Dart with no platform dependencies, and it i
 - The CVV / CVC is never read, by design. It is the proof that the cardholder is entering it knowingly, and capturing it from the camera would put every app using this package deeper into PCI DSS scope. Ask for it in a text field after the scan.
 - Only the networks listed above. Anything else is rejected even when the number is Luhn valid, and so are the few UnionPay ranges issued outside the Luhn checksum.
 - Cardholder name detection is heuristic. Embossed names on busy backgrounds, names with non Latin characters, and cards without a printed name will come back as `null`.
+- On macOS the built-in camera is the weakest one this package runs on: it is fixed at roughly arm's length, which is further than a card wants to be held. Continuity Camera is picked ahead of it when an iPhone is around. See [Choosing a camera on macOS](#choosing-a-camera-on-macos).
 
 ## Example
 
