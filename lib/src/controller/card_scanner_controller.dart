@@ -90,9 +90,14 @@ class CardScannerController extends ValueNotifier<CardScannerState> {
   CardScannerController({
     this.requirements = ScanRequirements.standard,
     this.stopWhenComplete = true,
+    String? cameraId,
     ScanSession? session,
     @visibleForTesting CardScannerPlatform? platform,
-  }) : _platform = platform ?? CardScannerPlatform.instance,
+  }) : // The field is private and the parameter is not, so an
+       // initializing formal would rename the argument to `_cameraId`.
+       // ignore: prefer_initializing_formals
+       _cameraId = cameraId,
+       _platform = platform ?? CardScannerPlatform.instance,
        _session = session ?? FrameAggregator(requirements: requirements),
        super(CardScannerState.initial);
 
@@ -105,6 +110,7 @@ class CardScannerController extends ValueNotifier<CardScannerState> {
 
   final CardScannerPlatform _platform;
   final ScanSession _session;
+  String? _cameraId;
   final _results = StreamController<CardScanResult>.broadcast();
   StreamSubscription<RecognizedFrame>? _frames;
   StreamSubscription<CameraHandle>? _preview;
@@ -126,6 +132,31 @@ class CardScannerController extends ValueNotifier<CardScannerState> {
   /// Emits every time the aggregated result changes.
   Stream<CardScanResult> get results => _results.stream;
 
+  /// Which camera the next [start] will ask for, or `null` to let the
+  /// platform choose. See [useCamera].
+  String? get cameraId => _cameraId;
+
+  /// The cameras worth choosing between, best first.
+  ///
+  /// Empty everywhere but macOS, where a Mac has no obviously right
+  /// camera: see [CameraKind]. An app that does not call this still gets
+  /// the best one, because that is what the platform opens by default.
+  Future<List<CameraDescription>> listCameras() => _platform.listCameras();
+
+  /// Scans with the camera [id] from [listCameras], or with the
+  /// platform's own choice when it is `null`.
+  ///
+  /// Reopens the camera if one is already running, so a picker can switch
+  /// while the preview is up. The accumulated result is kept: it is the
+  /// same card either way.
+  Future<void> useCamera(String? id) async {
+    if (id == _cameraId) return;
+    _cameraId = id;
+    if (!value.isRunning) return;
+    await stop();
+    await start();
+  }
+
   Future<T> _queue<T>(Future<T> Function() action) {
     final result = _chain.then((_) => action());
     _chain = result.then((_) {}, onError: (_) {});
@@ -139,7 +170,10 @@ class CardScannerController extends ValueNotifier<CardScannerState> {
     if (value.isRunning || _disposed) return;
     value = value.copyWith(clearError: true);
     try {
-      final camera = await _platform.start(regionOfInterest: _regionOfInterest);
+      final camera = await _platform.start(
+        regionOfInterest: _regionOfInterest,
+        cameraId: _cameraId,
+      );
       if (_disposed) {
         await _platform.stop();
         return;
