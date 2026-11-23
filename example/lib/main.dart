@@ -46,6 +46,15 @@ class _HomePageState extends State<HomePage> {
   List<CameraDescription> _cameras = const [];
   String? _cameraId;
 
+  /// Every line the engine read in the richest frame of the last scan.
+  ///
+  /// A wrong field is nearly always a line nobody would guess from the
+  /// result alone: the name heuristic has no structural marker to go by,
+  /// so printed card art that is shaped like a name wins. Showing the raw
+  /// lines is the difference between "the scanner is broken" and "the
+  /// card says that".
+  List<TextLine> _lines = const [];
+
   @override
   void initState() {
     super.initState();
@@ -78,6 +87,13 @@ class _HomePageState extends State<HomePage> {
     required ScanRequirements requirements,
     bool enableHaptics = false,
   }) async {
+    // The page owns its controller, so the frames are read from the
+    // platform directly. The richest frame is kept rather than the last:
+    // the final one is often a corner of the card on its way out.
+    var fullest = const <TextLine>[];
+    final frames = CardScannerPlatform.instance.frames.listen((frame) {
+      if (frame.lines.length > fullest.length) fullest = frame.lines;
+    });
     final result = await CardScannerPage.show(
       context,
       requirements: requirements,
@@ -86,8 +102,12 @@ class _HomePageState extends State<HomePage> {
       enableHaptics: enableHaptics,
       onOpenSettings: _openSettings,
     );
+    await frames.cancel();
     if (!mounted) return;
-    setState(() => _result = result);
+    setState(() {
+      _result = result;
+      _lines = fullest;
+    });
   }
 
   /// A denied camera is a dead end until the user changes it in the
@@ -120,7 +140,11 @@ class _HomePageState extends State<HomePage> {
         requirements: ScanRequirements.full,
       );
       if (!mounted) return;
-      setState(() => _result = result);
+      // Nothing here exposes the lines, and last scan's would be a lie.
+      setState(() {
+        _result = result;
+        _lines = const [];
+      });
     } on CardScannerException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
@@ -148,6 +172,13 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     final r = _result;
     final engine = _engine;
+    // The engine returns lines unordered; reading order makes the dump
+    // comparable with the card in your hand.
+    final lines = [..._lines]
+      ..sort((a, b) {
+        final byTop = a.box.top.compareTo(b.box.top);
+        return byTop != 0 ? byTop : a.box.left.compareTo(b.box.left);
+      });
     return Scaffold(
       appBar: AppBar(title: const Text('flutter_card_scanner_plus')),
       body: SingleChildScrollView(
@@ -257,6 +288,23 @@ class _HomePageState extends State<HomePage> {
                         '${r.isExpired() ? '  (expired)' : ''}',
                       ),
                       Text('Name: ${r.cardholderName ?? '—'}'),
+                      if (lines.isNotEmpty) ...[
+                        const Divider(height: 24),
+                        Text(
+                          'OCR lines (${lines.length})',
+                          style: Theme.of(context).textTheme.labelLarge,
+                        ),
+                        const SizedBox(height: 4),
+                        for (final line in lines)
+                          SelectableText(
+                            '${(line.confidence * 100).round().toString().padLeft(3)}%  '
+                            '${line.text}',
+                            style: const TextStyle(
+                              fontFamily: 'monospace',
+                              fontSize: 12,
+                            ),
+                          ),
+                      ],
                     ],
                   ),
                 ),

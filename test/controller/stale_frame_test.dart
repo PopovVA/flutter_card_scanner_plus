@@ -30,6 +30,71 @@ const _roi = TextBox(left: 0.1, top: 0.3, width: 0.7, height: 0.3);
 Future<void> settle() => Future<void>.delayed(Duration.zero);
 
 void main() {
+  test('a frame read before the card frame is placed is not scored', () async {
+    final fake = FakeScannerPlatform(_portrait);
+    final controller = CardScannerController(
+      platform: fake,
+      requirements: ScanRequirements.fast,
+      stopWhenComplete: false,
+    );
+    addTearDown(controller.dispose);
+
+    // What a mounted CardScannerView does: it will place the card frame
+    // once the preview is laid out, and until then the camera is reading
+    // the whole image — the desk, a screen, whatever is behind the card.
+    controller.attachView();
+    await controller.start();
+
+    fake.recognize(_card);
+    await settle();
+    expect(
+      controller.value.result.hasNumber,
+      isFalse,
+      reason: 'read outside the card frame',
+    );
+
+    await controller.setRegionOfInterest(_roi);
+    fake.recognize(_card);
+    await settle();
+    expect(controller.value.result.number, '4111111111111111');
+  });
+
+  test('a controller with no view is scored from the first frame', () async {
+    final fake = FakeScannerPlatform(_portrait);
+    final controller = CardScannerController(
+      platform: fake,
+      requirements: ScanRequirements.fast,
+      stopWhenComplete: false,
+    );
+    addTearDown(controller.dispose);
+
+    // Nothing will ever set a region here, so waiting for one would mean
+    // never scanning at all.
+    await controller.start();
+    fake.recognize(_card);
+    await settle();
+
+    expect(controller.value.result.number, '4111111111111111');
+  });
+
+  test('a view that goes away stops the waiting', () async {
+    final fake = FakeScannerPlatform(_portrait);
+    final controller = CardScannerController(
+      platform: fake,
+      requirements: ScanRequirements.fast,
+      stopWhenComplete: false,
+    );
+    addTearDown(controller.dispose);
+
+    controller.attachView();
+    await controller.start();
+    controller.detachView();
+
+    fake.recognize(_card);
+    await settle();
+    expect(controller.value.result.number, '4111111111111111');
+  });
+
   test('a frame from before a rotation is not scored', () async {
     final fake = FakeScannerPlatform(_portrait);
     final controller = CardScannerController(
