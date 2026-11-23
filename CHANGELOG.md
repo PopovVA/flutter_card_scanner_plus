@@ -1,8 +1,17 @@
-## 0.6.0
+## 0.6.0-beta.1
 
-Windows, in beta. The same channel contract the other platforms answer,
-a native plugin underneath, and nobody has held a card in front of it
-yet.
+Windows, in beta, and published as a prerelease so it reaches only the
+people who ask for it: the same channel contract the other platforms
+answer, a native plugin underneath, and nobody has held a card in front
+of it yet.
+
+```yaml
+dependencies:
+  flutter_card_scanner_plus: ^0.6.0-beta.1
+```
+
+Nothing changes for iOS, Android, macOS or the web, and a normal
+`flutter pub add` keeps giving 0.5.0 until this is proven.
 
 ### Added
 
