@@ -108,6 +108,9 @@ class _CardScannerViewState extends State<CardScannerView>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Tells the controller a region of interest is coming, so frames read
+    // over the whole image before it lands are not scored.
+    widget.controller.attachView();
     if (widget.autoStart) {
       WidgetsBinding.instance.addPostFrameCallback(
         (_) => widget.controller.start(),
@@ -118,6 +121,7 @@ class _CardScannerViewState extends State<CardScannerView>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    widget.controller.detachView();
     super.dispose();
   }
 
@@ -150,6 +154,10 @@ class _CardScannerViewState extends State<CardScannerView>
     super.didUpdateWidget(old);
     // The cached region is only valid for the frame and the camera it was
     // computed from. Anything that reshapes either one invalidates it.
+    if (old.controller != widget.controller) {
+      old.controller.detachView();
+      widget.controller.attachView();
+    }
     if (old.controller != widget.controller ||
         old.cardAspectRatio != widget.cardAspectRatio ||
         old.frameWidthFraction != widget.frameWidthFraction ||

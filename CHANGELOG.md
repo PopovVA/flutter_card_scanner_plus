@@ -24,6 +24,14 @@ reading about.
 
 ### Fixed
 
+- Frames read before the card frame was placed are no longer scored. The
+  region of interest can only be computed once the preview is on screen
+  and the camera has said what shape it is, so the first frames after a
+  start were read over the whole image and could confirm text that was
+  never on the card — a poster, a screen, the desk. A controller with a
+  `CardScannerView` mounted now waits for that region instead. One driven
+  without a view sets no region and is scored from the first frame, as
+  before.
 - `CameraHandle.torchAvailable` was read from the channel by
   `CameraHandle.fromMap` but thrown away by `start`, so a native platform
   always reported a torch. macOS has none and says so, which is what hides

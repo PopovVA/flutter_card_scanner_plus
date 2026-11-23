@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
+import 'package:meta/meta.dart';
 
 import '../channel/card_scanner_platform.dart';
 import '../core/card_frame_parser.dart';
@@ -122,6 +123,9 @@ class CardScannerController extends ValueNotifier<CardScannerState> {
   Completer<CardScanResult>? _once;
   TextBox? _regionOfInterest;
   DateTime? _reshapedAt;
+
+  /// How many [CardScannerView]s are mounted on this controller.
+  int _views = 0;
   bool _disposed = false;
 
   /// How long frames are dropped after a rotation if the new region of
@@ -268,6 +272,24 @@ class CardScannerController extends ValueNotifier<CardScannerState> {
   /// Turns the torch on if it is off, and off if it is on.
   Future<void> toggleTorch() => setTorch(!value.torchEnabled);
 
+  /// Called by [CardScannerView] while it is mounted.
+  ///
+  /// A view is what turns the drawn card frame into a region of interest,
+  /// and it cannot do that until the preview has been laid out and the
+  /// camera has said what shape it is. Until then the camera reads the
+  /// whole image, which is the room the card is held in, so a controller
+  /// that knows a view is coming waits for it instead of voting on text
+  /// that was never on the card. A controller driven without a view sets
+  /// no region and is scored from the first frame.
+  @internal
+  void attachView() => _views++;
+
+  /// Called by [CardScannerView] as it goes away.
+  @internal
+  void detachView() {
+    if (_views > 0) _views--;
+  }
+
   /// Limits OCR to [box] (normalized preview coordinates). The view sets
   /// this automatically to match the card frame.
   Future<void> setRegionOfInterest(TextBox box) async {
@@ -294,6 +316,10 @@ class CardScannerController extends ValueNotifier<CardScannerState> {
     // previous geometry: its boxes are in the old orientation and were
     // filtered by the old region of interest. Scoring it would move a field
     // relative to the number and could confirm text from off the card.
+    // A view is on screen but has not placed the card frame yet, so this
+    // was read over the whole image. See [attachView].
+    if (_views > 0 && _regionOfInterest == null) return;
+
     final reshaped = _reshapedAt;
     if (reshaped != null) {
       if (DateTime.now().difference(reshaped) < _settleTimeout) return;
