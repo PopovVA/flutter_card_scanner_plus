@@ -33,15 +33,19 @@
   <text x="72" y="150" fill="#ffffff" font-size="44" font-weight="700">flutter_card_scanner_plus</text>
   <text x="72" y="196" fill="#c7d2fe" font-size="22">On-device bank card scanner for Flutter</text>
   <text x="72" y="228" fill="#94a3b8" font-size="17">Visa, Mastercard and American Express. Number, expiry and cardholder name.</text>
-  <text x="72" y="254" fill="#94a3b8" font-size="17">iOS Vision and Android ML Kit. Frames never leave the device.</text>
+  <text x="72" y="254" fill="#94a3b8" font-size="17">Vision on iOS and macOS, ML Kit on Android, PaddleOCR in a browser.</text>
 
   <g transform="translate(72 290)" font-size="14" font-weight="600">
-    <rect width="118" height="32" rx="16" fill="#1e293b" stroke="#334155"/>
-    <text x="59" y="21" fill="#e2e8f0" text-anchor="middle">iOS 15+</text>
-    <rect x="130" width="140" height="32" rx="16" fill="#1e293b" stroke="#334155"/>
-    <text x="200" y="21" fill="#e2e8f0" text-anchor="middle">Android 7.0+</text>
-    <rect x="282" width="128" height="32" rx="16" fill="#1e293b" stroke="#334155"/>
-    <text x="346" y="21" fill="#e2e8f0" text-anchor="middle">MIT</text>
+    <rect width="110" height="32" rx="16" fill="#1e293b" stroke="#334155"/>
+    <text x="55" y="21" fill="#e2e8f0" text-anchor="middle">iOS 15+</text>
+    <rect x="122" width="140" height="32" rx="16" fill="#1e293b" stroke="#334155"/>
+    <text x="192" y="21" fill="#e2e8f0" text-anchor="middle">Android 7.0+</text>
+    <rect x="274" width="146" height="32" rx="16" fill="#1e293b" stroke="#334155"/>
+    <text x="347" y="21" fill="#e2e8f0" text-anchor="middle">macOS 10.15+</text>
+    <rect x="432" width="86" height="32" rx="16" fill="#1e293b" stroke="#334155"/>
+    <text x="475" y="21" fill="#e2e8f0" text-anchor="middle">Web</text>
+    <rect x="530" width="80" height="32" rx="16" fill="#1e293b" stroke="#334155"/>
+    <text x="570" y="21" fill="#e2e8f0" text-anchor="middle">MIT</text>
   </g>
 
   <!-- right: card inside viewfinder -->
