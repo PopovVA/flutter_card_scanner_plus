@@ -1,9 +1,10 @@
 #include "camera_catalog.h"
 
-#include <mfapi.h>
-#include <objbase.h>
-#include <mfidl.h>
 #include <windows.h>
+
+#include <mfapi.h>
+#include <mfidl.h>
+#include <objbase.h>
 #include <wrl/client.h>
 
 namespace card_scanner {

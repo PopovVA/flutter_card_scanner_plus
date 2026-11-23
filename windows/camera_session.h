@@ -2,8 +2,16 @@
 #define FLUTTER_PLUGIN_CARD_SCANNER_CAMERA_SESSION_H_
 
 #include <flutter/texture_registrar.h>
-#include <mfreadwrite.h>
 #include <windows.h>
+// mfidl.h declares IMFMediaSource, which mfreadwrite.h uses without
+// declaring, so the order here is load-bearing. And the SDK's own
+// mfreadwrite.h trips C4229, which this plugin builds with as an error.
+#include <mfapi.h>
+#include <mfidl.h>
+#pragma warning(push)
+#pragma warning(disable : 4229)
+#include <mfreadwrite.h>
+#pragma warning(pop)
 #include <wrl/client.h>
 
 #include <atomic>
