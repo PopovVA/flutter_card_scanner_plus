@@ -117,8 +117,14 @@ std::unique_ptr<CameraSession> CameraSession::Open(
 
   // RGB32 is usually bottom-up, which shows as a negative stride. The
   // sign is the only thing that matters here; the copy uses the width.
+  // Media Foundation stores the stride as a UINT32 that is read back as
+  // signed: there is no GetINT32 on an attribute store.
   INT32 stride = 0;
-  if (FAILED(current->GetINT32(MF_MT_DEFAULT_STRIDE, &stride)) || stride == 0) {
+  UINT32 stored_stride = 0;
+  if (SUCCEEDED(current->GetUINT32(MF_MT_DEFAULT_STRIDE, &stored_stride))) {
+    stride = static_cast<INT32>(stored_stride);
+  }
+  if (stride == 0) {
     LONG computed = 0;
     if (SUCCEEDED(MFGetStrideForBitmapInfoHeader(MFVideoFormat_RGB32.Data1, width,
                                                  &computed))) {
