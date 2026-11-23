@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
+import 'package:meta/meta.dart';
 
 import '../channel/card_scanner_platform.dart';
 import '../core/card_frame_parser.dart';
@@ -90,9 +91,14 @@ class CardScannerController extends ValueNotifier<CardScannerState> {
   CardScannerController({
     this.requirements = ScanRequirements.standard,
     this.stopWhenComplete = true,
+    String? cameraId,
     ScanSession? session,
     @visibleForTesting CardScannerPlatform? platform,
-  }) : _platform = platform ?? CardScannerPlatform.instance,
+  }) : // The field is private and the parameter is not, so an
+       // initializing formal would rename the argument to `_cameraId`.
+       // ignore: prefer_initializing_formals
+       _cameraId = cameraId,
+       _platform = platform ?? CardScannerPlatform.instance,
        _session = session ?? FrameAggregator(requirements: requirements),
        super(CardScannerState.initial);
 
@@ -105,6 +111,7 @@ class CardScannerController extends ValueNotifier<CardScannerState> {
 
   final CardScannerPlatform _platform;
   final ScanSession _session;
+  String? _cameraId;
   final _results = StreamController<CardScanResult>.broadcast();
   StreamSubscription<RecognizedFrame>? _frames;
   StreamSubscription<CameraHandle>? _preview;
@@ -116,6 +123,9 @@ class CardScannerController extends ValueNotifier<CardScannerState> {
   Completer<CardScanResult>? _once;
   TextBox? _regionOfInterest;
   DateTime? _reshapedAt;
+
+  /// How many [CardScannerView]s are mounted on this controller.
+  int _views = 0;
   bool _disposed = false;
 
   /// How long frames are dropped after a rotation if the new region of
@@ -125,6 +135,31 @@ class CardScannerController extends ValueNotifier<CardScannerState> {
 
   /// Emits every time the aggregated result changes.
   Stream<CardScanResult> get results => _results.stream;
+
+  /// Which camera the next [start] will ask for, or `null` to let the
+  /// platform choose. See [useCamera].
+  String? get cameraId => _cameraId;
+
+  /// The cameras worth choosing between, best first.
+  ///
+  /// Empty everywhere but macOS, where a Mac has no obviously right
+  /// camera: see [CameraKind]. An app that does not call this still gets
+  /// the best one, because that is what the platform opens by default.
+  Future<List<CameraDescription>> listCameras() => _platform.listCameras();
+
+  /// Scans with the camera [id] from [listCameras], or with the
+  /// platform's own choice when it is `null`.
+  ///
+  /// Reopens the camera if one is already running, so a picker can switch
+  /// while the preview is up. The accumulated result is kept: it is the
+  /// same card either way.
+  Future<void> useCamera(String? id) async {
+    if (id == _cameraId) return;
+    _cameraId = id;
+    if (!value.isRunning) return;
+    await stop();
+    await start();
+  }
 
   Future<T> _queue<T>(Future<T> Function() action) {
     final result = _chain.then((_) => action());
@@ -139,7 +174,10 @@ class CardScannerController extends ValueNotifier<CardScannerState> {
     if (value.isRunning || _disposed) return;
     value = value.copyWith(clearError: true);
     try {
-      final camera = await _platform.start(regionOfInterest: _regionOfInterest);
+      final camera = await _platform.start(
+        regionOfInterest: _regionOfInterest,
+        cameraId: _cameraId,
+      );
       if (_disposed) {
         await _platform.stop();
         return;
@@ -234,6 +272,24 @@ class CardScannerController extends ValueNotifier<CardScannerState> {
   /// Turns the torch on if it is off, and off if it is on.
   Future<void> toggleTorch() => setTorch(!value.torchEnabled);
 
+  /// Called by [CardScannerView] while it is mounted.
+  ///
+  /// A view is what turns the drawn card frame into a region of interest,
+  /// and it cannot do that until the preview has been laid out and the
+  /// camera has said what shape it is. Until then the camera reads the
+  /// whole image, which is the room the card is held in, so a controller
+  /// that knows a view is coming waits for it instead of voting on text
+  /// that was never on the card. A controller driven without a view sets
+  /// no region and is scored from the first frame.
+  @internal
+  void attachView() => _views++;
+
+  /// Called by [CardScannerView] as it goes away.
+  @internal
+  void detachView() {
+    if (_views > 0) _views--;
+  }
+
   /// Limits OCR to [box] (normalized preview coordinates). The view sets
   /// this automatically to match the card frame.
   Future<void> setRegionOfInterest(TextBox box) async {
@@ -260,6 +316,10 @@ class CardScannerController extends ValueNotifier<CardScannerState> {
     // previous geometry: its boxes are in the old orientation and were
     // filtered by the old region of interest. Scoring it would move a field
     // relative to the number and could confirm text from off the card.
+    // A view is on screen but has not placed the card frame yet, so this
+    // was read over the whole image. See [attachView].
+    if (_views > 0 && _regionOfInterest == null) return;
+
     final reshaped = _reshapedAt;
     if (reshaped != null) {
       if (DateTime.now().difference(reshaped) < _settleTimeout) return;

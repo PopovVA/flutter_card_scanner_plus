@@ -1,12 +1,14 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, kIsWeb;
 // Deprecated by Flutter 3.50 for package:material_ui. Kept until the
 // package itself moves: see lib/src/ui/card_scanner_page.dart.
 // ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter_card_scanner_plus/flutter_card_scanner_plus.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 void main() => runApp(const ExampleApp());
 
@@ -38,6 +40,21 @@ class _HomePageState extends State<HomePage> {
   OcrEngineReport? _engine;
   StreamSubscription<OcrEngineReport>? _engineReports;
 
+  /// Empty everywhere but macOS, where a Mac has several cameras and no
+  /// obviously right one. The picker below appears only when there is
+  /// something to pick.
+  List<CameraDescription> _cameras = const [];
+  String? _cameraId;
+
+  /// Every line the engine read in the richest frame of the last scan.
+  ///
+  /// A wrong field is nearly always a line nobody would guess from the
+  /// result alone: the name heuristic has no structural marker to go by,
+  /// so printed card art that is shaped like a name wins. Showing the raw
+  /// lines is the difference between "the scanner is broken" and "the
+  /// card says that".
+  List<TextLine> _lines = const [];
+
   @override
   void initState() {
     super.initState();
@@ -45,6 +62,7 @@ class _HomePageState extends State<HomePage> {
       debugPrint('$report');
       if (mounted) setState(() => _engine = report);
     });
+    _loadCameras();
   }
 
   @override
@@ -53,22 +71,62 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
+  Future<void> _loadCameras() async {
+    final cameras = await CardScannerPlatform.instance.listCameras();
+    if (!mounted || cameras.isEmpty) return;
+    // The list is ranked, so the first is the one the plugin would have
+    // opened anyway.
+    setState(() {
+      _cameras = cameras;
+      _cameraId = cameras.first.id;
+    });
+  }
+
   Future<void> _scan({
     required ScanRequirements requirements,
     bool enableHaptics = false,
   }) async {
+    // The page owns its controller, so the frames are read from the
+    // platform directly. The richest frame is kept rather than the last:
+    // the final one is often a corner of the card on its way out.
+    var fullest = const <TextLine>[];
+    final frames = CardScannerPlatform.instance.frames.listen((frame) {
+      if (frame.lines.length > fullest.length) fullest = frame.lines;
+    });
     final result = await CardScannerPage.show(
       context,
       requirements: requirements,
       title: 'Scan card',
+      cameraId: _cameraId,
       enableHaptics: enableHaptics,
-      // A real app would call permission_handler's openAppSettings here.
-      onOpenSettings: () => ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Open the app settings here')),
-      ),
+      onOpenSettings: _openSettings,
     );
+    await frames.cancel();
     if (!mounted) return;
-    setState(() => _result = result);
+    setState(() {
+      _result = result;
+      _lines = fullest;
+    });
+  }
+
+  /// A denied camera is a dead end until the user changes it in the
+  /// system settings, so the button has to land them there. macOS has no
+  /// permission_handler support for this pane, so the example opens it by
+  /// URL; a real app on iOS or Android calls openAppSettings instead.
+  Future<void> _openSettings() async {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.macOS) {
+      final opened = await launchUrl(
+        Uri.parse(
+          'x-apple.systempreferences:com.apple.preference.security'
+          '?Privacy_Camera',
+        ),
+      );
+      if (opened) return;
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Open the app settings here')));
   }
 
   Future<void> _scanPhoto() async {
@@ -81,7 +139,11 @@ class _HomePageState extends State<HomePage> {
         requirements: ScanRequirements.full,
       );
       if (!mounted) return;
-      setState(() => _result = result);
+      // Nothing here exposes the lines, and last scan's would be a lie.
+      setState(() {
+        _result = result;
+        _lines = const [];
+      });
     } on CardScannerException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
@@ -109,13 +171,38 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     final r = _result;
     final engine = _engine;
+    // The engine returns lines unordered; reading order makes the dump
+    // comparable with the card in your hand.
+    final lines = [..._lines]
+      ..sort((a, b) {
+        final byTop = a.box.top.compareTo(b.box.top);
+        return byTop != 0 ? byTop : a.box.left.compareTo(b.box.left);
+      });
     return Scaffold(
       appBar: AppBar(title: const Text('flutter_card_scanner_plus')),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (_cameras.isNotEmpty) ...[
+              DropdownButtonFormField<String>(
+                initialValue: _cameraId,
+                decoration: const InputDecoration(
+                  labelText: 'Camera',
+                  border: OutlineInputBorder(),
+                ),
+                items: [
+                  for (final camera in _cameras)
+                    DropdownMenuItem(
+                      value: camera.id,
+                      child: Text('${camera.name} · ${camera.kind.name}'),
+                    ),
+                ],
+                onChanged: (id) => setState(() => _cameraId = id),
+              ),
+              const SizedBox(height: 16),
+            ],
             FilledButton.icon(
               // A browser reads about one frame a second rather than
               // eight, so it votes on fewer of them.
@@ -200,6 +287,23 @@ class _HomePageState extends State<HomePage> {
                         '${r.isExpired() ? '  (expired)' : ''}',
                       ),
                       Text('Name: ${r.cardholderName ?? '—'}'),
+                      if (lines.isNotEmpty) ...[
+                        const Divider(height: 24),
+                        Text(
+                          'OCR lines (${lines.length})',
+                          style: Theme.of(context).textTheme.labelLarge,
+                        ),
+                        const SizedBox(height: 4),
+                        for (final line in lines)
+                          SelectableText(
+                            '${(line.confidence * 100).round().toString().padLeft(3)}%  '
+                            '${line.text}',
+                            style: const TextStyle(
+                              fontFamily: 'monospace',
+                              fontSize: 12,
+                            ),
+                          ),
+                      ],
                     ],
                   ),
                 ),
