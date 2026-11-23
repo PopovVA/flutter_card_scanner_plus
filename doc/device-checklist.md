@@ -122,3 +122,38 @@ Two setup mistakes look like plugin bugs:
 - Without `NSCameraUsageDescription` in `Info.plist`, the app is killed
   the moment `AVCaptureDevice.requestAccess` is called, which reads as a
   crash rather than a refusal.
+
+## Windows
+
+Nothing in this section has ever been run. Every line is a guess about
+code that compiles, which is the only thing CI can prove about it. Work
+through it on a Windows 10 or 11 machine with a webcam, and report what
+happens even when it is boring.
+
+```bash
+cd example && flutter run -d windows
+```
+
+| Step | What should happen |
+|---|---|
+| Open the example | The camera list names the machine's webcams, each one `external` |
+| Scan a card | The preview is upright and the right way round, not mirrored and not upside down |
+| Watch the colours | Skin and card art look right. Blue where red should be means the BGRA to RGBA swap is wrong |
+| Scan a card on a second camera if there is one | Opens and reads the same way |
+| Unplug the webcam mid scan | `cameraDetached` reaches the error screen rather than freezing the preview |
+| Turn off Settings > Privacy & security > Camera > "Let desktop apps access your camera", then scan | `permissionDenied`, and the error screen offers settings |
+| Look at the scanner screen | No torch button |
+| Resize the window narrow, then very wide | The preview fills the guide and the region of interest follows |
+| Open and close the scanner fifteen times | Every open shows a preview, never black, and the app does not leak a camera |
+| Call `CardNfcReader.isAvailable()` | `false`, and the app keeps working |
+
+The three failures most likely to show up first, and what each means:
+
+- **An upside-down preview.** Media Foundation usually delivers RGB32
+  bottom-up, which the capture loop detects from a negative stride. A
+  camera that reports a positive stride while still sending bottom-up
+  rows would look like this.
+- **Red and blue swapped.** The frame reaches Flutter as RGBA and leaves
+  the camera as BGRA; the loop swaps the channels itself.
+- **Empty reads with a perfect preview.** No OCR language pack, or a
+  region of interest that landed somewhere other than the guide.

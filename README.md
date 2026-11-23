@@ -6,15 +6,15 @@
   <a href="https://pub.dev/packages/flutter_card_scanner_plus"><img src="https://img.shields.io/pub/v/flutter_card_scanner_plus.svg?label=pub&color=blue" alt="pub version"></a>
   <a href="https://github.com/PopovVA/flutter_card_scanner_plus/actions/workflows/ci.yml"><img src="https://github.com/PopovVA/flutter_card_scanner_plus/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/PopovVA/flutter_card_scanner_plus/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT"></a>
-  <img src="https://img.shields.io/badge/platforms-iOS%20%7C%20Android%20%7C%20macOS%20%7C%20Web-lightgrey.svg" alt="platforms">
+  <img src="https://img.shields.io/badge/platforms-iOS%20%7C%20Android%20%7C%20macOS%20%7C%20Windows%20%7C%20Web-lightgrey.svg" alt="platforms">
   <a href="https://buymeacoffee.com/LeonRedfield"><img src="https://img.shields.io/badge/Buy%20me%20a%20coffee-support-FFDD00?logo=buymeacoffee&logoColor=black" alt="Buy me a coffee"></a>
 </p>
 
-Scan a payment card with the camera and get its number, expiry date and cardholder name back as a typed result. Recognition runs fully on the device using the platform OCR engines: Vision on iOS and macOS, ML Kit on Android, and PaddleOCR on WebGPU or WebAssembly in a browser. There is no third party camera plugin, no cloud service and no network access.
+Scan a payment card with the camera and get its number, expiry date and cardholder name back as a typed result. Recognition runs fully on the device using the platform OCR engines: Vision on iOS and macOS, ML Kit on Android, Windows.Media.Ocr on Windows, and PaddleOCR on WebGPU or WebAssembly in a browser. There is no third party camera plugin, no cloud service and no network access.
 
 Supported networks: **Visa**, **Mastercard**, **American Express**, **Discover**, **JCB**, **Diners Club**, **UnionPay**.
 
-Platforms: **iOS**, **Android**, **macOS** and **web**.
+Platforms: **iOS**, **Android**, **macOS**, **web**, and **Windows** in beta.
 
 ## Highlights
 
@@ -73,6 +73,30 @@ Package Manager, which is Flutter's own floor there.
 Recognition is the same Vision request iOS runs, on the same accurate
 revision. What differs is the camera, and it is worth knowing before you
 ship: see [Choosing a camera on macOS](#choosing-a-camera-on-macos).
+
+### Windows (beta)
+
+Nothing to add to the project: no manifest entry, no capability. The
+camera opens through Media Foundation and the text is read by
+`Windows.Media.Ocr`, both of which ship with Windows 10 and later.
+
+Two things can stop it on a machine that otherwise works, and the plugin
+reports each rather than failing quietly:
+
+- **Settings > Privacy & security > Camera**, with "Let desktop apps
+  access your camera" off, makes the camera refuse to open. There is no
+  prompt a desktop app can raise, so the only way out is that page, which
+  is what `permissionDenied` means here. `CardScannerPage`'s
+  `onOpenSettings` is where an app sends the user there.
+- A Windows install with **no OCR language pack** has no engine to read
+  with. Frames come back empty rather than wrong.
+
+**Beta** means exactly one thing: this has been compiled and nothing
+more. No one has yet held a card in front of a Windows machine running
+it. The camera ranking macOS does is also absent, because Windows does
+not say which camera is built in: `listCameras()` returns them in the
+order the system enumerates, every one of them `CameraKind.external`, and
+the first is what opens.
 
 ## Quick start
 
@@ -662,6 +686,8 @@ Everything in step 4 and 5 is plain Dart with no platform dependencies, and it i
 - The CVV / CVC is never read, by design. It is the proof that the cardholder is entering it knowingly, and capturing it from the camera would put every app using this package deeper into PCI DSS scope. Ask for it in a text field after the scan.
 - Only the networks listed above. Anything else is rejected even when the number is Luhn valid, and so are the few UnionPay ranges issued outside the Luhn checksum.
 - Cardholder name detection is heuristic. Embossed names on busy backgrounds, names with non Latin characters, and cards without a printed name will come back as `null`.
+- Windows is beta, and unverified on real hardware. There is no torch and
+  no NFC there either, and the camera list is unranked.
 - On macOS the built-in camera is the weakest one this package runs on: it is fixed at roughly arm's length, which is further than a card wants to be held. Continuity Camera is picked ahead of it when an iPhone is around. See [Choosing a camera on macOS](#choosing-a-camera-on-macos).
 
 ## Example
