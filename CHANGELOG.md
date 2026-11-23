@@ -1,11 +1,22 @@
 ## 0.4.0
 
-macOS is a supported platform. Same Vision request as iOS, same parser,
-same voting; a different camera underneath, which is the part worth
-reading about.
+Two ways to read a card that were not there before: the chip over NFC,
+and a Mac. Both go through the same parser and the same result type, so
+an app picks a path rather than a code path.
 
 ### Added
 
+- **NFC, opt in at the source level.** `CardNfcReader.read()` reads the
+  number and expiry off the chip on iOS and Android, exactly, with no
+  camera and no lighting. An app that never calls it ships without the
+  Android permission and without touching CoreNFC, so nothing new
+  appears in its store listing. The plugin's manifest does not declare
+  `android.permission.NFC`; an app that wants it adds the line itself.
+  The cardholder name is almost never on the chip, so a scan is still
+  how you get one.
+- `CardNfcProbe.run()` reports what a tapped card answered — AID, TLV,
+  which SELECT worked — and stops before any record is read, so a
+  support thread can carry it. The example app shows it in a dialog.
 - **macOS.** `macos/` carries a native plugin built on AVFoundation and
   Vision, delivering frames to Flutter as a texture the same way iOS does.
   Minimum deployment target is 10.15 with CocoaPods, 12.0 with Swift
