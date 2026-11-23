@@ -26,6 +26,18 @@ about as well as the phone itself; the built-in `builtIn` camera focuses
 at roughly arm's length and is noticeably slower. There is no torch button
 and the NFC buttons report that macOS cannot read contactless cards.
 
+## Windows (beta)
+
+```bash
+flutter run -d windows
+```
+
+The picker lists the machine's webcams, unranked, and the first one is
+what opens. Nothing here has been run on a Windows machine: if the
+preview is upside down, the colours are swapped, or a card never reads,
+that is news worth an issue. `doc/device-checklist.md` says what each of
+those failures points at.
+
 ## Signing
 
 The project carries no development team on purpose, so it does not drag

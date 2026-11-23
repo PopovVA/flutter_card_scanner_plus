@@ -1,3 +1,50 @@
+## 0.6.0-beta.1
+
+Windows, in beta, and published as a prerelease so it reaches only the
+people who ask for it: the same channel contract the other platforms
+answer, a native plugin underneath, and nobody has held a card in front
+of it yet.
+
+```yaml
+dependencies:
+  flutter_card_scanner_plus: ^0.6.0-beta.1
+```
+
+Nothing changes for iOS, Android, macOS or the web, and a normal
+`flutter pub add` keeps giving 0.5.0 until this is proven.
+
+### Added
+
+- **Windows (beta).** `windows/` carries a C++ plugin: Media Foundation
+  opens the camera and hands frames to Flutter as a texture,
+  `Windows.Media.Ocr` reads them. Both ship with Windows 10 and later, so
+  there is nothing to install, no manifest entry and no third-party
+  engine — the same promise the other platforms make.
+- The example app has a Windows target, and CI builds it.
+
+### Beta means compiled, not proven
+
+Every line of this was written and reviewed without a Windows machine to
+run it on. CI compiles it on `windows-latest`, which catches the kind of
+mistake a compiler catches and nothing else. Until someone scans a real
+card:
+
+- Treat a wrong preview, an upside-down frame or an empty read as
+  expected rather than surprising, and say so in an issue.
+- `doc/device-checklist.md` has a Windows section listing what to try.
+
+### Not on Windows
+
+- No torch: `setTorch` is accepted and does nothing, and `start` reports
+  `torchAvailable: false`.
+- No NFC: `isAvailable()` answers `false` and the rest fails with
+  `nfcUnavailable`.
+- No camera ranking: Windows does not say which camera is built in, so
+  `listCameras()` returns them in enumeration order, each one
+  `CameraKind.external`, and the first is the one that opens.
+- A Windows install with no OCR language pack has no engine, and frames
+  come back empty rather than wrong.
+
 ## 0.5.0
 
 macOS is a supported platform. Same Vision request as iOS, same parser,

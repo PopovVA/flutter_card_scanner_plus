@@ -1,9 +1,9 @@
 name: flutter_card_scanner_plus
 description: >-
-  On-device bank card scanner for iOS, Android, macOS and the web (Visa,
-  Mastercard, Amex, Discover, JCB, Diners, UnionPay). Native OCR, no
+  On-device bank card scanner for iOS, Android, macOS, Windows and the web
+  (Visa, Mastercard, Amex, Discover, JCB, Diners, UnionPay). Native OCR, no
   third-party camera plugin required.
-version: 0.5.0
+version: 0.6.0-beta.1
 repository: https://github.com/PopovVA/flutter_card_scanner_plus
 issue_tracker: https://github.com/PopovVA/flutter_card_scanner_plus/issues
 topics:
@@ -57,3 +57,5 @@ flutter:
       web:
         pluginClass: CardScannerPlusWeb
         fileName: src/web/card_scanner_web.dart
+      windows:
+        pluginClass: FlutterCardScannerPlusPluginCApi
