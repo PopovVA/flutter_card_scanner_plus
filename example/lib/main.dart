@@ -1,12 +1,14 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, kIsWeb;
 // Deprecated by Flutter 3.50 for package:material_ui. Kept until the
 // package itself moves: see lib/src/ui/card_scanner_page.dart.
 // ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter_card_scanner_plus/flutter_card_scanner_plus.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 void main() => runApp(const ExampleApp());
 
@@ -82,13 +84,30 @@ class _HomePageState extends State<HomePage> {
       title: 'Scan card',
       cameraId: _cameraId,
       enableHaptics: enableHaptics,
-      // A real app would call permission_handler's openAppSettings here.
-      onOpenSettings: () => ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Open the app settings here')),
-      ),
+      onOpenSettings: _openSettings,
     );
     if (!mounted) return;
     setState(() => _result = result);
+  }
+
+  /// A denied camera is a dead end until the user changes it in the
+  /// system settings, so the button has to land them there. macOS has no
+  /// permission_handler support for this pane, so the example opens it by
+  /// URL; a real app on iOS or Android calls openAppSettings instead.
+  Future<void> _openSettings() async {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.macOS) {
+      final opened = await launchUrl(
+        Uri.parse(
+          'x-apple.systempreferences:com.apple.preference.security'
+          '?Privacy_Camera',
+        ),
+      );
+      if (opened) return;
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Open the app settings here')));
   }
 
   Future<void> _scanPhoto() async {
