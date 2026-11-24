@@ -30,3 +30,12 @@ export 'src/ui/card_scanner_strings.dart';
 export 'src/ui/card_scanner_view.dart';
 export 'src/web/ocr_engine.dart' show OcrBackend, OcrEngineReport;
 export 'src/card_scanner.dart';
+export 'src/nfc/apdu.dart';
+export 'src/nfc/card_nfc_probe.dart'
+    show CardNfcProbe, NfcExchange, NfcProbeReport;
+export 'src/nfc/nfc_platform.dart'
+    show CardNfcException, CardNfcPlatform, MethodChannelCardNfcPlatform;
+export 'src/nfc/tlv.dart';
+export 'src/nfc/card_nfc_reader.dart' show AflEntry, CardNfcReader;
+export 'src/nfc/pdol.dart';
+export 'src/nfc/track2.dart';

@@ -167,6 +167,61 @@ class _HomePageState extends State<HomePage> {
     ].join(', ');
   }
 
+  Future<void> _readNfc() async {
+    if (!await CardNfcReader.isAvailable()) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('NFC is off or not supported here')),
+      );
+      return;
+    }
+    try {
+      final card = await CardNfcReader.read();
+      if (!mounted) return;
+      setState(() {
+        _result = card;
+        _lines = const [];
+      });
+    } on CardNfcException catch (e) {
+      if (!mounted || e.isCancelled) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
+  Future<void> _probeNfc() async {
+    if (!await CardNfcProbe.isAvailable()) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('NFC is off or not supported here')),
+      );
+      return;
+    }
+    final report = await CardNfcProbe.run();
+    // Also to the console, so a run can be read from a laptop rather than
+    // copied off a phone. The probe stops before any record is read, so
+    // there is no card data in it.
+    debugPrint('--- NFC probe ---\n${report.summary}\n--- end ---');
+    if (!mounted) return;
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(report.isSuccess ? 'Card answered' : 'No card data'),
+        content: SingleChildScrollView(
+          child: SelectableText(
+            report.summary,
+            style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final r = _result;
@@ -250,6 +305,18 @@ class _HomePageState extends State<HomePage> {
               onPressed: _scanPhoto,
               icon: const Icon(Icons.photo_library_outlined),
               label: const Text('Scan from photo'),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _readNfc,
+              icon: const Icon(Icons.nfc),
+              label: const Text('Tap card (NFC)'),
+            ),
+            const SizedBox(height: 12),
+            TextButton.icon(
+              onPressed: _probeNfc,
+              icon: const Icon(Icons.bug_report_outlined),
+              label: const Text('NFC probe (diagnostics)'),
             ),
             const SizedBox(height: 32),
             if (engine != null) ...[
