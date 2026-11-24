@@ -165,6 +165,7 @@ class _HomePageState extends State<HomePage> {
       if (report.tooSlow) 'too slow to scan',
       if (report.webGpuFailure != null) 'WebGPU was not usable',
     ].join(', ');
+  }
 
   Future<void> _readNfc() async {
     if (!await CardNfcReader.isAvailable()) {

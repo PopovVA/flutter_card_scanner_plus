@@ -9,16 +9,23 @@ import 'tlv.dart';
 /// One command and its reply, kept for diagnostics.
 @immutable
 class NfcExchange {
+  /// One command and the reply it drew.
   const NfcExchange({
     required this.label,
     required this.command,
     required this.response,
   });
 
+  /// What the command was for, in words, for the report.
   final String label;
+
+  /// The command as it went out, in hex.
   final String command;
+
+  /// What the card answered.
   final ResponseApdu response;
 
+  /// The status word as four hex digits, e.g. `9000`.
   String get statusWord =>
       response.statusWord.toRadixString(16).toUpperCase().padLeft(4, '0');
 
@@ -29,6 +36,7 @@ class NfcExchange {
 /// Result of [CardNfcProbe.run].
 @immutable
 class NfcProbeReport {
+  /// A report of everything one probe run said and heard.
   const NfcProbeReport({
     required this.exchanges,
     required this.offeredAids,
@@ -45,6 +53,7 @@ class NfcProbeReport {
   /// The AID that was selected successfully, as hex, or `null`.
   final String? selectedAid;
 
+  /// Why the run stopped early, or `null` when it did not.
   final CardNfcException? error;
 
   /// The card answered PPSE and a payment application was selected.

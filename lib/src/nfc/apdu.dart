@@ -7,6 +7,7 @@ import 'tlv.dart';
 /// An ISO 7816-4 command APDU.
 @immutable
 class CommandApdu {
+  /// A command addressed by its four header bytes.
   const CommandApdu({
     required this.cla,
     required this.ins,
@@ -16,10 +17,19 @@ class CommandApdu {
     this.le = 0x00,
   });
 
+  /// Class byte: which family of commands this belongs to.
   final int cla;
+
+  /// Instruction byte: which command it is.
   final int ins;
+
+  /// First parameter byte, read according to [ins].
   final int p1;
+
+  /// Second parameter byte, read according to [ins].
   final int p2;
+
+  /// Command body, empty for a command that carries none.
   final List<int> data;
 
   /// Expected length. `0x00` means "up to 256 bytes".
@@ -42,6 +52,7 @@ class CommandApdu {
   factory CommandApdu.readRecord(int sfi, int record) =>
       CommandApdu(cla: 0x00, ins: 0xB2, p1: record, p2: (sfi << 3) | 0x04);
 
+  /// Encodes the command the way a card expects to read it.
   Uint8List toBytes() {
     final out = <int>[cla, ins, p1, p2];
     if (data.isNotEmpty) {
@@ -59,14 +70,20 @@ class CommandApdu {
 /// A response APDU: payload plus the two status bytes.
 @immutable
 class ResponseApdu {
+  /// A reply split into its body and the two status bytes.
   const ResponseApdu({
     required this.data,
     required this.sw1,
     required this.sw2,
   });
 
+  /// Response body, with the status word already taken off.
   final Uint8List data;
+
+  /// First status byte: `0x90` with [sw2] `0x00` means success.
   final int sw1;
+
+  /// Second status byte, which qualifies [sw1].
   final int sw2;
 
   /// Status word as a single value, e.g. `0x9000`.
@@ -108,20 +125,43 @@ abstract final class EmvIds {
 
   /// Application identifiers for the supported networks.
   static const visa = [0xA0, 0x00, 0x00, 0x00, 0x03, 0x10, 0x10];
+
+  /// Mastercard's application identifier.
   static const mastercard = [0xA0, 0x00, 0x00, 0x00, 0x04, 0x10, 0x10];
+
+  /// American Express's application identifier.
   static const amex = [0xA0, 0x00, 0x00, 0x00, 0x25, 0x01];
 
+  /// The identifiers a card is asked for, in that order.
   static const supported = [visa, mastercard, amex];
 
   /// EMV tags used by this package.
   static const tagAid = 0x4F;
+
+  /// The application's printable name.
   static const tagApplicationLabel = 0x50;
+
+  /// Track 2 equivalent data: the number and the expiry together.
   static const tagTrack2Equivalent = 0x57;
+
+  /// The card number on its own.
   static const tagPan = 0x5A;
+
+  /// The cardholder name, which most cards leave empty.
   static const tagCardholderName = 0x5F20;
+
+  /// The expiry date, as YYMMDD.
   static const tagExpiryDate = 0x5F24;
+
+  /// One entry in the directory of applications.
   static const tagApplicationTemplate = 0x61;
+
+  /// File Control Information: what a SELECT answers with.
   static const tagFci = 0x6F;
+
+  /// The list of terminal data the card wants before it answers.
   static const tagPdol = 0x9F38;
+
+  /// Application File Locator: where the records to read live.
   static const tagAfl = 0x94;
 }

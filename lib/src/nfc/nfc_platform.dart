@@ -4,11 +4,14 @@ import 'package:meta/meta.dart';
 /// Error raised by the native NFC layer.
 @immutable
 class CardNfcException implements Exception {
+  /// A failure carrying one of the codes below.
   const CardNfcException(this.code, [this.message]);
 
   /// One of [unavailable], [cancelled], [tagLost], [sessionError], or a
   /// platform specific code.
   final String code;
+
+  /// What the platform said, when it said anything.
   final String? message;
 
   /// The device has no NFC, it is switched off, or the app lacks the
@@ -21,9 +24,13 @@ class CardNfcException implements Exception {
   /// The card was moved away mid conversation.
   static const tagLost = 'nfcTagLost';
 
+  /// The reader session itself failed.
   static const sessionError = 'nfcSessionError';
 
+  /// Whether the user closed the sheet rather than anything failing.
   bool get isCancelled => code == cancelled;
+
+  /// Whether this device cannot read cards at all.
   bool get isUnavailable => code == unavailable;
 
   @override
@@ -36,6 +43,7 @@ class CardNfcException implements Exception {
 /// Everything above this (EMV flow, TLV, parsing) is plain Dart, so it can
 /// be tested without a device by swapping [instance].
 abstract class CardNfcPlatform {
+  /// The implementation every call goes through.
   static CardNfcPlatform instance = MethodChannelCardNfcPlatform();
 
   /// Whether this device can read contactless cards right now.
@@ -58,6 +66,7 @@ abstract class CardNfcPlatform {
 
 /// Default implementation talking to the plugin over a method channel.
 class MethodChannelCardNfcPlatform implements CardNfcPlatform {
+  /// Talks to the native side over the NFC method channel.
   MethodChannelCardNfcPlatform({@visibleForTesting MethodChannel? channel})
     : _channel =
           channel ?? const MethodChannel('flutter_card_scanner_plus/nfc');

@@ -12,6 +12,7 @@ import 'track2.dart';
 /// One entry of the Application File Locator: which records to read.
 @immutable
 class AflEntry {
+  /// One range of records to read, as the card located them.
   const AflEntry({
     required this.sfi,
     required this.firstRecord,
@@ -20,7 +21,11 @@ class AflEntry {
 
   /// Short file identifier.
   final int sfi;
+
+  /// First record number in the range, counting from one.
   final int firstRecord;
+
+  /// Last record number in the range, inclusive.
   final int lastRecord;
 
   @override

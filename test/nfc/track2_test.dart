@@ -49,8 +49,10 @@ void main() {
     });
 
     test('rejects an unsupported network', () {
-      // Discover, Luhn valid but out of scope for this package.
-      expect(Track2Parser.parse('6011111111111117D2812201'), isNull);
+      // Luhn valid and in no issuer range this package reads. Discover
+      // used to stand here, which stopped being true the release it was
+      // added: a test that names a network ages with the network list.
+      expect(Track2Parser.parse('9999111111111117D2812201'), isNull);
     });
 
     test('rejects a malformed month', () {

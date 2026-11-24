@@ -5,6 +5,7 @@ import 'package:meta/meta.dart';
 /// One BER-TLV element as used by EMV.
 @immutable
 class Tlv {
+  /// An element with its [tag], its [value] and any [children].
   const Tlv({required this.tag, required this.value, required this.children});
 
   /// Tag bytes as an integer, e.g. `0x6F`, `0x4F`, `0xBF0C`.
@@ -16,6 +17,7 @@ class Tlv {
   /// Parsed children, empty for a primitive element.
   final List<Tlv> children;
 
+  /// Whether this element holds other elements rather than data.
   bool get isConstructed => children.isNotEmpty;
 
   /// Value as uppercase hex, e.g. `A0000000031010`.
